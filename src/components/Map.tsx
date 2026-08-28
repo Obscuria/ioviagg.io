@@ -26,7 +26,7 @@ import {
   Layers,
 } from 'lucide-react';
 
-type MapStyle = 'voyager' | 'osm' | 'satellite' | 'dark';
+type MapStyle = 'streets' | 'topo' | 'satellite' | 'osm' | 'dark';
 
 const MAP_STYLES: Record<
   MapStyle,
@@ -38,13 +38,26 @@ const MAP_STYLES: Record<
     maxZoom?: number;
   }
 > = {
-  voyager: {
-    name: 'Occidentale (Latin)',
-    url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
+  streets: {
+    name: 'Occidentale (Strade)',
+    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',
     attribution:
-      '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
-    subdomains: 'abcd',
-    maxZoom: 20,
+      'Tiles &copy; Esri &mdash; Source: Esri, DeLorme, NAVTEQ, USGS, Intermap, iPC, METI, TomTom',
+    maxZoom: 19,
+  },
+  topo: {
+    name: 'Topografica & Rilievi',
+    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}',
+    attribution:
+      'Tiles &copy; Esri &mdash; Esri, DeLorme, NAVTEQ, TomTom, Intermap, USGS, FAO, NPS, NRCAN',
+    maxZoom: 19,
+  },
+  satellite: {
+    name: 'Satellite (Esri)',
+    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+    attribution:
+      'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid',
+    maxZoom: 19,
   },
   osm: {
     name: 'OpenStreetMap (Locale)',
@@ -53,20 +66,12 @@ const MAP_STYLES: Record<
       '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
     maxZoom: 19,
   },
-  satellite: {
-    name: 'Satellite (Esri)',
-    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-    attribution:
-      'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community',
-    maxZoom: 19,
-  },
   dark: {
-    name: 'Dark Mode',
-    url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+    name: 'Dark Gray Mode',
+    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}',
     attribution:
-      '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
-    subdomains: 'abcd',
-    maxZoom: 20,
+      'Tiles &copy; Esri &mdash; Esri, DeLorme, NAVTEQ',
+    maxZoom: 16,
   },
 };
 
@@ -338,8 +343,8 @@ export const Map: React.FC<MapProps> = ({
   const defaultCenter: [number, number] = [42.5, 12.5];
   const defaultZoom = 6;
 
-  // Map Tile Style State (Default: Western Voyager)
-  const [mapStyle, setMapStyle] = useState<MapStyle>('voyager');
+  // Map Tile Style State (Default: Western Esri Streets)
+  const [mapStyle, setMapStyle] = useState<MapStyle>('streets');
   const [showLayerMenu, setShowLayerMenu] = useState<boolean>(false);
 
   // Pending point state for click confirmation
