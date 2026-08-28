@@ -32,6 +32,7 @@ import {
   Layers,
   AlertTriangle,
   X,
+  GripVertical,
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -168,6 +169,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   // Confirmation state for deleting a day with waypoints
   const [dayToDelete, setDayToDelete] = useState<number | null>(null);
+
+  // Drag and Drop state for Day tabs
+  const [draggedDay, setDraggedDay] = useState<number | null>(null);
+  const [dragOverDay, setDragOverDay] = useState<number | null>(null);
 
   const totalStopMinutes = waypoints.reduce((acc, w) => acc + (w.stopDurationMin || 0), 0);
 
@@ -479,23 +484,66 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </span>
         </button>
 
-        {/* Individual Day Tabs */}
+        {/* Individual Day Tabs with Drag & Drop */}
         {Array.from({ length: totalDays }, (_, i) => i + 1).map((dayNum) => {
           const countInDay = waypoints.filter((w) => (w.day || 1) === dayNum).length;
           const isActive = activeDayTab === dayNum;
+          const isBeingDragged = draggedDay === dayNum;
+          const isDragOver = dragOverDay === dayNum && draggedDay !== dayNum;
 
           return (
             <div
               key={dayNum}
-              className={`group relative flex items-center rounded-lg transition-all ${
-                isActive
+              draggable={true}
+              onDragStart={(e) => {
+                e.dataTransfer.setData('text/plain', String(dayNum));
+                e.dataTransfer.effectAllowed = 'move';
+                setDraggedDay(dayNum);
+              }}
+              onDragOver={(e) => {
+                e.preventDefault();
+                e.dataTransfer.dropEffect = 'move';
+                if (dragOverDay !== dayNum) {
+                  setDragOverDay(dayNum);
+                }
+              }}
+              onDragLeave={(e) => {
+                if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+                  setDragOverDay(null);
+                }
+              }}
+              onDrop={(e) => {
+                e.preventDefault();
+                const sourceDay = parseInt(e.dataTransfer.getData('text/plain'), 10) || draggedDay;
+                if (sourceDay && sourceDay !== dayNum) {
+                  onSwapDays(sourceDay, dayNum);
+                }
+                setDraggedDay(null);
+                setDragOverDay(null);
+              }}
+              onDragEnd={() => {
+                setDraggedDay(null);
+                setDragOverDay(null);
+              }}
+              className={`group relative flex items-center rounded-lg transition-all cursor-grab active:cursor-grabbing select-none ${
+                isBeingDragged
+                  ? 'opacity-40 scale-95 border-2 border-dashed border-indigo-400 bg-indigo-950/40'
+                  : isDragOver
+                  ? 'ring-2 ring-indigo-400 ring-offset-2 ring-offset-slate-900 scale-105 bg-indigo-600/40 border-indigo-400'
+                  : isActive
                   ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30 ring-1 ring-indigo-400/50'
                   : 'bg-slate-800/80 hover:bg-slate-800 text-slate-300'
               }`}
+              title={`Trascina per scambiare Giorno ${dayNum}`}
             >
+              {/* Drag Handle Icon */}
+              <div className="pl-1.5 opacity-40 group-hover:opacity-100 transition-opacity">
+                <GripVertical className="w-3 h-3 text-slate-400" />
+              </div>
+
               <button
                 onClick={() => onActiveDayTabChange(dayNum)}
-                className="px-2.5 py-1.5 text-xs font-semibold flex items-center gap-1.5 whitespace-nowrap cursor-pointer"
+                className="px-2 py-1.5 text-xs font-semibold flex items-center gap-1.5 whitespace-nowrap cursor-pointer"
               >
                 <span>Giorno {dayNum}</span>
                 <span
@@ -507,8 +555,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 </span>
               </button>
 
-              {/* Day Swap / Move buttons on hover */}
-              <div className="flex items-center pr-1 opacity-60 group-hover:opacity-100 transition-opacity">
+              {/* Day Swap / Move buttons on hover for quick keyboard/click */}
+              <div className="flex items-center pr-1 opacity-40 group-hover:opacity-100 transition-opacity">
                 {dayNum > 1 && (
                   <button
                     onClick={(e) => {
