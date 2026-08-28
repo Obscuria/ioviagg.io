@@ -8,6 +8,7 @@ export interface Waypoint {
   address?: string;
   category: WaypointCategory;
   stopDurationMin?: number;
+  day?: number;
 }
 
 export interface RouteLeg {
@@ -28,12 +29,14 @@ export interface TripPreset {
   name: string;
   region: string;
   description: string;
+  days?: number;
   waypoints: {
     lat: number;
     lng: number;
     title: string;
     address?: string;
     category?: WaypointCategory;
+    day?: number;
   }[];
 }
 

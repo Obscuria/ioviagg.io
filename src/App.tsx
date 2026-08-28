@@ -6,9 +6,14 @@ import { Map } from './components/Map';
 import { TRIP_PRESETS } from './data/presets';
 
 export function App() {
+  const initialPreset = TRIP_PRESETS[0];
+
+  // Number of trip days & active day tab filter
+  const [totalDays, setTotalDays] = useState<number>(initialPreset.days || 3);
+  const [activeDayTab, setActiveDayTab] = useState<number | null>(null); // null = "Tutti i Giorni"
+
   // Initialize with the Tuscany tour by default for instant delight
   const [waypoints, setWaypoints] = useState<Waypoint[]>(() => {
-    const initialPreset = TRIP_PRESETS[0];
     return initialPreset.waypoints.map((w, idx) => {
       const cat = w.category || (idx === 0 ? 'standard' : idx === 1 ? 'food' : idx === 2 ? 'poi' : idx === 3 ? 'parking' : 'stay');
       const defaultDuration = cat === 'stay' ? 480 : cat === 'food' ? 45 : cat === 'poi' ? 60 : 15;
@@ -20,6 +25,7 @@ export function App() {
         address: w.address,
         category: cat,
         stopDurationMin: defaultDuration,
+        day: w.day || 1,
       };
     });
   });
@@ -66,6 +72,62 @@ export function App() {
     calculateRoute(waypoints);
   }, [waypoints, calculateRoute]);
 
+  // Add day
+  const handleAddDay = useCallback(() => {
+    setTotalDays((prev) => prev + 1);
+  }, []);
+
+  // Force set total days (used when user types or confirms changes)
+  const handleSetTotalDays = useCallback((count: number) => {
+    const validCount = Math.max(1, count);
+    setTotalDays(validCount);
+    // If activeDayTab is beyond new total, reset it
+    setActiveDayTab((prev) => (prev && prev > validCount ? null : prev));
+  }, []);
+
+  // Remove a specific day and its waypoints
+  const handleRemoveDayConfirmed = useCallback((dayToRemove: number) => {
+    setWaypoints((prev) => {
+      // Remove waypoints of the removed day, and shift subsequent days down by 1
+      return prev
+        .filter((w) => (w.day || 1) !== dayToRemove)
+        .map((w) => {
+          const currentDay = w.day || 1;
+          if (currentDay > dayToRemove) {
+            return { ...w, day: currentDay - 1 };
+          }
+          return w;
+        });
+    });
+
+    setTotalDays((prev) => Math.max(1, prev - 1));
+    setActiveDayTab((prev) => {
+      if (prev === dayToRemove) return null;
+      if (prev && prev > dayToRemove) return prev - 1;
+      return prev;
+    });
+  }, []);
+
+  // Swap two days (e.g. Day 1 with Day 3)
+  const handleSwapDays = useCallback((dayA: number, dayB: number) => {
+    if (dayA === dayB) return;
+    setWaypoints((prev) =>
+      prev.map((w) => {
+        const currentDay = w.day || 1;
+        if (currentDay === dayA) return { ...w, day: dayB };
+        if (currentDay === dayB) return { ...w, day: dayA };
+        return w;
+      })
+    );
+  }, []);
+
+  // Change single waypoint's day
+  const handleChangeWaypointDay = useCallback((waypointId: string, newDay: number) => {
+    setWaypoints((prev) =>
+      prev.map((w) => (w.id === waypointId ? { ...w, day: Math.max(1, newDay) } : w))
+    );
+  }, []);
+
   // Add waypoint from map confirmation, POI click, or search
   const handleAddWaypoint = useCallback(
     async ({
@@ -98,6 +160,8 @@ export function App() {
           ? 60
           : 15;
 
+      const targetDay = activeDayTab !== null ? activeDayTab : 1;
+
       const newWaypoint: Waypoint = {
         id: newId,
         lat,
@@ -106,6 +170,7 @@ export function App() {
         address: address || undefined,
         category,
         stopDurationMin: calculatedDuration,
+        day: targetDay,
       };
 
       setWaypoints((prev) => [...prev, newWaypoint]);
@@ -131,34 +196,40 @@ export function App() {
         }
       }
     },
-    [waypoints.length]
+    [waypoints.length, activeDayTab]
   );
 
   // Add waypoint from textual SearchBar (with automatically detected category)
-  const handleSelectSearchResult = useCallback((result: SearchResult) => {
-    const newId = `search-wp-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`;
-    const defaultDuration =
-      result.category === 'stay'
-        ? 480
-        : result.category === 'food'
-        ? 45
-        : result.category === 'poi'
-        ? 60
-        : 15;
+  const handleSelectSearchResult = useCallback(
+    (result: SearchResult) => {
+      const newId = `search-wp-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`;
+      const defaultDuration =
+        result.category === 'stay'
+          ? 480
+          : result.category === 'food'
+          ? 45
+          : result.category === 'poi'
+          ? 60
+          : 15;
 
-    const newWaypoint: Waypoint = {
-      id: newId,
-      lat: result.lat,
-      lng: result.lng,
-      title: result.name,
-      address: result.displayName,
-      category: result.category,
-      stopDurationMin: defaultDuration,
-    };
+      const targetDay = activeDayTab !== null ? activeDayTab : 1;
 
-    setWaypoints((prev) => [...prev, newWaypoint]);
-    setSelectedWaypointId(newId);
-  }, []);
+      const newWaypoint: Waypoint = {
+        id: newId,
+        lat: result.lat,
+        lng: result.lng,
+        title: result.name,
+        address: result.displayName,
+        category: result.category,
+        stopDurationMin: defaultDuration,
+        day: targetDay,
+      };
+
+      setWaypoints((prev) => [...prev, newWaypoint]);
+      setSelectedWaypointId(newId);
+    },
+    [activeDayTab]
+  );
 
   // Update waypoint category manually (from sidebar or map popup)
   const handleChangeCategory = useCallback((id: string, newCategory: WaypointCategory) => {
@@ -219,10 +290,16 @@ export function App() {
     setRouteData(null);
     setError(null);
     setSelectedWaypointId(null);
+    setTotalDays(1);
+    setActiveDayTab(null);
   }, []);
 
   // Load preset itinerary
   const handleLoadPreset = useCallback((preset: TripPreset) => {
+    const presetDays = preset.days || 1;
+    setTotalDays(presetDays);
+    setActiveDayTab(null);
+
     const loadedWaypoints: Waypoint[] = preset.waypoints.map((w, idx) => {
       const cat = w.category || 'standard';
       const defaultDuration = cat === 'stay' ? 480 : cat === 'food' ? 45 : cat === 'poi' ? 60 : 15;
@@ -234,6 +311,7 @@ export function App() {
         address: w.address,
         category: cat,
         stopDurationMin: defaultDuration,
+        day: w.day || 1,
       };
     });
     setWaypoints(loadedWaypoints);
@@ -248,6 +326,14 @@ export function App() {
         waypoints={waypoints}
         routeData={routeData}
         departureTime={departureTime}
+        totalDays={totalDays}
+        activeDayTab={activeDayTab}
+        onActiveDayTabChange={setActiveDayTab}
+        onAddDay={handleAddDay}
+        onSetTotalDays={handleSetTotalDays}
+        onRemoveDay={handleRemoveDayConfirmed}
+        onSwapDays={handleSwapDays}
+        onChangeWaypointDay={handleChangeWaypointDay}
         onDepartureTimeChange={setDepartureTime}
         onRemoveWaypoint={handleRemoveWaypoint}
         onReorderWaypoint={handleReorderWaypoint}
