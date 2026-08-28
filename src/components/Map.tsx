@@ -23,7 +23,52 @@ import {
   Plus,
   Minus,
   Maximize2,
+  Layers,
 } from 'lucide-react';
+
+type MapStyle = 'voyager' | 'osm' | 'satellite' | 'dark';
+
+const MAP_STYLES: Record<
+  MapStyle,
+  {
+    name: string;
+    url: string;
+    attribution: string;
+    subdomains?: string;
+    maxZoom?: number;
+  }
+> = {
+  voyager: {
+    name: 'Occidentale (Latin)',
+    url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
+    attribution:
+      '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+    subdomains: 'abcd',
+    maxZoom: 20,
+  },
+  osm: {
+    name: 'OpenStreetMap (Locale)',
+    url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+    attribution:
+      '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+    maxZoom: 19,
+  },
+  satellite: {
+    name: 'Satellite (Esri)',
+    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+    attribution:
+      'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community',
+    maxZoom: 19,
+  },
+  dark: {
+    name: 'Dark Mode',
+    url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+    attribution:
+      '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
+    subdomains: 'abcd',
+    maxZoom: 20,
+  },
+};
 
 interface PendingPoint {
   lat: number;
@@ -293,6 +338,10 @@ export const Map: React.FC<MapProps> = ({
   const defaultCenter: [number, number] = [42.5, 12.5];
   const defaultZoom = 6;
 
+  // Map Tile Style State (Default: Western Voyager)
+  const [mapStyle, setMapStyle] = useState<MapStyle>('voyager');
+  const [showLayerMenu, setShowLayerMenu] = useState<boolean>(false);
+
   // Pending point state for click confirmation
   const [pendingPoint, setPendingPoint] = useState<PendingPoint | null>(null);
 
@@ -364,6 +413,40 @@ export const Map: React.FC<MapProps> = ({
 
       {/* Floating Action Controls */}
       <div className="absolute top-4 right-4 z-[400] flex items-center gap-2">
+        {/* Layer Style Switcher */}
+        <div className="relative">
+          <button
+            onClick={() => setShowLayerMenu((prev) => !prev)}
+            className="bg-slate-900/90 hover:bg-slate-800 border border-slate-700/80 px-2.5 py-2 rounded-xl shadow-xl flex items-center gap-1.5 text-xs text-slate-200 hover:text-white transition-all cursor-pointer"
+            title="Cambia stile mappa (Occidentale / Satellite / Dark)"
+          >
+            <Layers className="w-3.5 h-3.5 text-indigo-400" />
+            <span className="font-semibold">{MAP_STYLES[mapStyle].name}</span>
+          </button>
+
+          {showLayerMenu && (
+            <div className="absolute right-0 top-11 w-52 bg-slate-900 border border-slate-700/90 rounded-xl p-1 shadow-2xl z-50 space-y-0.5">
+              {(Object.keys(MAP_STYLES) as MapStyle[]).map((key) => (
+                <button
+                  key={key}
+                  onClick={() => {
+                    setMapStyle(key);
+                    setShowLayerMenu(false);
+                  }}
+                  className={`w-full text-left px-2.5 py-1.5 rounded-lg text-xs transition-colors flex items-center justify-between cursor-pointer ${
+                    mapStyle === key
+                      ? 'bg-indigo-600 text-white font-semibold'
+                      : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+                  }`}
+                >
+                  <span>{MAP_STYLES[key].name}</span>
+                  {mapStyle === key && <Check className="w-3 h-3 text-white" />}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
         {onFitRoute && waypoints.length > 0 && (
           <button
             onClick={onFitRoute}
@@ -391,10 +474,13 @@ export const Map: React.FC<MapProps> = ({
         {/* Dynamic Resize & Container Bounds Synchronizer */}
         <MapResizer />
 
+        {/* Dynamic Tile Layer (Default: Western Voyager) */}
         <TileLayer
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors | OSRM'
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-          maxZoom={19}
+          key={mapStyle}
+          attribution={MAP_STYLES[mapStyle].attribution}
+          url={MAP_STYLES[mapStyle].url}
+          subdomains={MAP_STYLES[mapStyle].subdomains || 'abc'}
+          maxZoom={MAP_STYLES[mapStyle].maxZoom || 19}
         />
 
         {/* Map Click Handler */}

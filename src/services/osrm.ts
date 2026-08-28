@@ -60,6 +60,8 @@ export async function fetchOSRMRoute(waypoints: Waypoint[]): Promise<RouteData |
   }
 }
 
+import { toWesternLatin } from './transliterate';
+
 // Simple reverse geocode helper with cache
 const geocodeCache = new Map<string, string>();
 
@@ -71,26 +73,62 @@ export async function reverseGeocode(lat: number, lng: number): Promise<string> 
 
   try {
     const res = await fetch(
-      `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}`,
+      `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}&namedetails=1&extratags=1&accept-language=it,en,en-US`,
       {
         headers: {
-          'Accept-Language': 'it,en',
+          'Accept-Language': 'it,en;q=0.9,en-US;q=0.8',
         },
       }
     );
     if (!res.ok) throw new Error('Nominatim error');
     const data = await res.json();
-    
-    const city = data.address?.city || data.address?.town || data.address?.village || data.address?.municipality || data.address?.county;
-    const state = data.address?.state || data.address?.country;
-    
+
+    const namedetails = data.namedetails || {};
+    const address = data.address || {};
+
+    // Prioritize Italian, English, Latin or Romanized names
+    const preferredName =
+      namedetails['name:it'] ||
+      namedetails['name:en'] ||
+      namedetails['name:latin'] ||
+      namedetails['name:romanized'] ||
+      namedetails['int_name'] ||
+      namedetails['name:zh-Latn'] ||
+      namedetails['name:pinyin'] ||
+      namedetails['name:ja-Latn'] ||
+      namedetails['name:ko-Latn'] ||
+      namedetails['name:ru-Latn'] ||
+      namedetails['name:international'] ||
+      data.name;
+
+    const city =
+      address.city ||
+      address.town ||
+      address.village ||
+      address.municipality ||
+      address.county;
+
+    const state = address.state || address.country;
+
     let result = '';
-    if (city && state) {
-      result = `${city}, ${state}`;
+
+    if (preferredName) {
+      const westernTitle = toWesternLatin(preferredName);
+      if (city && state && !westernTitle.toLowerCase().includes(city.toLowerCase())) {
+        result = `${westernTitle}, ${toWesternLatin(city)}`;
+      } else if (state && !westernTitle.toLowerCase().includes(state.toLowerCase())) {
+        result = `${westernTitle}, ${toWesternLatin(state)}`;
+      } else {
+        result = westernTitle;
+      }
+    } else if (city && state) {
+      result = `${toWesternLatin(city)}, ${toWesternLatin(state)}`;
     } else if (city) {
-      result = city;
+      result = toWesternLatin(city);
     } else if (data.display_name) {
-      result = data.display_name.split(',').slice(0, 2).join(',').trim();
+      result = toWesternLatin(
+        data.display_name.split(',').slice(0, 2).join(',').trim()
+      );
     } else {
       result = `${lat.toFixed(4)}°, ${lng.toFixed(4)}°`;
     }

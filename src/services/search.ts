@@ -1,4 +1,5 @@
 import type { SearchResult, WaypointCategory } from '../types/trip';
+import { toWesternLatin } from './transliterate';
 
 function mapOSMToCategory(item: {
   class?: string;
@@ -126,8 +127,11 @@ export async function searchPlaces(query: string): Promise<SearchResult[]> {
             const props = f.properties;
             const [lng, lat] = f.geometry.coordinates;
 
-            const name = props.name || props.city || trimmed;
-            const contextParts = [props.city, props.state, props.country].filter(Boolean);
+            const rawName = props.name || props.city || trimmed;
+            const name = toWesternLatin(rawName);
+            const contextParts = [props.city, props.state, props.country]
+              .filter(Boolean)
+              .map((p) => toWesternLatin(p!));
             const displayName =
               contextParts.length > 0 ? `${name} (${contextParts.join(', ')})` : name;
 
@@ -159,10 +163,10 @@ export async function searchPlaces(query: string): Promise<SearchResult[]> {
   try {
     const nominatimUrl = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(
       trimmed
-    )}&format=jsonv2&addressdetails=1&extratags=1&limit=7`;
+    )}&format=jsonv2&addressdetails=1&namedetails=1&extratags=1&accept-language=it,en,en-US&limit=7`;
 
     const res = await fetch(nominatimUrl, {
-      headers: { 'Accept-Language': 'it,en' },
+      headers: { 'Accept-Language': 'it,en;q=0.9,en-US;q=0.8' },
     });
     if (!res.ok) return [];
 
@@ -172,6 +176,7 @@ export async function searchPlaces(query: string): Promise<SearchResult[]> {
         item: {
           place_id: number;
           name?: string;
+          namedetails?: Record<string, string>;
           display_name: string;
           lat: string;
           lon: string;
@@ -180,7 +185,24 @@ export async function searchPlaces(query: string): Promise<SearchResult[]> {
         },
         index: number
       ) => {
-        const name = item.name || item.display_name.split(',')[0].trim();
+        const namedetails = item.namedetails || {};
+        const preferredName =
+          namedetails['name:it'] ||
+          namedetails['name:en'] ||
+          namedetails['name:latin'] ||
+          namedetails['name:romanized'] ||
+          namedetails['int_name'] ||
+          namedetails['name:zh-Latn'] ||
+          namedetails['name:pinyin'] ||
+          namedetails['name:ja-Latn'] ||
+          namedetails['name:ko-Latn'] ||
+          namedetails['name:ru-Latn'] ||
+          item.name ||
+          item.display_name.split(',')[0].trim();
+
+        const name = toWesternLatin(preferredName);
+        const displayName = toWesternLatin(item.display_name);
+
         const { category, categoryLabel } = mapOSMToCategory({
           class: item.class,
           type: item.type,
@@ -189,7 +211,7 @@ export async function searchPlaces(query: string): Promise<SearchResult[]> {
         return {
           id: `nom-${item.place_id || index}`,
           name,
-          displayName: item.display_name,
+          displayName,
           lat: parseFloat(item.lat),
           lng: parseFloat(item.lon),
           category,

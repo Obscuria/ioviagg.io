@@ -1,0 +1,178 @@
+// Cyrillic to Latin map
+const cyrillicToLatinMap: Record<string, string> = {
+  А: 'A',
+  Б: 'B',
+  В: 'V',
+  Г: 'G',
+  Д: 'D',
+  Е: 'E',
+  Ё: 'Yo',
+  Ж: 'Zh',
+  З: 'Z',
+  И: 'I',
+  Й: 'Y',
+  К: 'K',
+  Л: 'L',
+  М: 'M',
+  Н: 'N',
+  О: 'O',
+  П: 'P',
+  Р: 'R',
+  С: 'S',
+  Т: 'T',
+  У: 'U',
+  Ф: 'F',
+  Х: 'Kh',
+  Ц: 'Ts',
+  Ч: 'Ch',
+  Ш: 'Sh',
+  Щ: 'Shch',
+  Ъ: '',
+  Ы: 'Y',
+  Ь: '',
+  Э: 'E',
+  Ю: 'Yu',
+  Я: 'Ya',
+  а: 'a',
+  б: 'b',
+  в: 'v',
+  г: 'g',
+  д: 'd',
+  е: 'e',
+  ё: 'yo',
+  ж: 'zh',
+  з: 'z',
+  и: 'i',
+  й: 'y',
+  к: 'k',
+  л: 'l',
+  м: 'm',
+  н: 'n',
+  о: 'o',
+  п: 'p',
+  р: 'r',
+  с: 's',
+  т: 't',
+  у: 'u',
+  ф: 'f',
+  х: 'kh',
+  ц: 'ts',
+  ч: 'ch',
+  ш: 'sh',
+  щ: 'shch',
+  ъ: '',
+  ы: 'y',
+  ь: '',
+  э: 'e',
+  ю: 'yu',
+  я: 'ya',
+  Є: 'Ye',
+  є: 'ye',
+  І: 'I',
+  і: 'i',
+  Ї: 'Yi',
+  ї: 'yi',
+  Ґ: 'G',
+  ґ: 'g',
+  Ђ: 'Dj',
+  ђ: 'dj',
+  Ј: 'J',
+  ј: 'j',
+  Љ: 'Lj',
+  љ: 'lj',
+  Њ: 'Nj',
+  њ: 'nj',
+  Ћ: 'C',
+  ћ: 'c',
+  Џ: 'Dz',
+  џ: 'dz',
+};
+
+// Greek to Latin map
+const greekToLatinMap: Record<string, string> = {
+  Α: 'A',
+  Β: 'V',
+  Γ: 'G',
+  Δ: 'D',
+  Ε: 'E',
+  Ζ: 'Z',
+  Η: 'I',
+  Θ: 'Th',
+  Ι: 'I',
+  Κ: 'K',
+  Λ: 'L',
+  Μ: 'M',
+  Ν: 'N',
+  Ξ: 'X',
+  Ο: 'O',
+  Π: 'P',
+  Ρ: 'R',
+  Σ: 'S',
+  Τ: 'T',
+  Υ: 'Y',
+  Φ: 'F',
+  Χ: 'Ch',
+  Ψ: 'Ps',
+  Ω: 'O',
+  α: 'a',
+  β: 'v',
+  γ: 'g',
+  δ: 'd',
+  ε: 'e',
+  ζ: 'z',
+  η: 'i',
+  θ: 'th',
+  ι: 'i',
+  κ: 'k',
+  λ: 'l',
+  μ: 'm',
+  ν: 'n',
+  ξ: 'x',
+  ο: 'o',
+  π: 'p',
+  ρ: 'r',
+  σ: 's',
+  ς: 's',
+  τ: 't',
+  υ: 'y',
+  φ: 'f',
+  χ: 'ch',
+  ψ: 'ps',
+  ω: 'o',
+  ά: 'a',
+  έ: 'e',
+  ή: 'i',
+  ί: 'i',
+  ό: 'o',
+  ύ: 'y',
+  ώ: 'o',
+  ϊ: 'i',
+  ϋ: 'y',
+};
+
+/**
+ * Transliterates Cyrillic, Greek, etc. into Western Latin alphabet
+ */
+export function toWesternLatin(text: string): string {
+  if (!text) return '';
+  return text
+    .split('')
+    .map((char) => cyrillicToLatinMap[char] || greekToLatinMap[char] || char)
+    .join('');
+}
+
+/**
+ * Checks if a string contains East Asian characters (Chinese, Japanese Kanji/Kana, Korean Hangul)
+ */
+export function hasEastAsianScript(text: string): boolean {
+  return /[\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff\uff66-\uff9f\uac00-\ud7af]/.test(
+    text
+  );
+}
+
+/**
+ * Checks if a string contains non-Latin scripts (Arabic, Cyrillic, Greek, Hebrew, Thai, etc.)
+ */
+export function hasNonLatinScript(text: string): boolean {
+  return /[^\u0000-\u024F\u1E00-\u1EFF\s\d.,;:'"()/\-_&+=?!@#$%*]/.test(text);
+}
