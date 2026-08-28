@@ -459,29 +459,29 @@ export const Map: React.FC<MapProps> = ({
 
   return (
     <div className="relative w-full h-full bg-slate-950 overflow-hidden select-none">
-      {/* Floating Top Search Bar */}
-      <div className="absolute top-4 left-4 z-[400] max-w-sm sm:max-w-md w-full">
+      {/* Floating Top Search Bar (Mobile: top-3 left-3 right-3; Desktop: top-4 left-4 max-w-md) */}
+      <div className="absolute top-3 left-3 right-3 sm:right-auto sm:left-4 sm:top-4 z-[400] max-w-none sm:max-w-md">
         <SearchBar
           onSelectPlace={onSelectSearchResult}
           proximityLocation={proximityLocation}
         />
       </div>
 
-      {/* Floating Action Controls */}
-      <div className="absolute top-4 right-4 z-[400] flex items-center gap-2">
+      {/* Floating Action Controls (Mobile: top-16 right-3 vertical stack; Desktop: top-4 right-4 horizontal) */}
+      <div className="absolute top-16 right-3 sm:top-4 sm:right-4 z-[400] flex flex-col sm:flex-row items-end sm:items-center gap-2">
         {/* Layer Style Switcher */}
         <div className="relative">
           <button
             onClick={() => setShowLayerMenu((prev) => !prev)}
-            className="bg-slate-900/90 hover:bg-slate-800 border border-slate-700/80 px-2.5 py-2 rounded-xl shadow-xl flex items-center gap-1.5 text-xs text-slate-200 hover:text-white transition-all cursor-pointer"
+            className="bg-slate-900/90 hover:bg-slate-800 border border-slate-700/80 p-2 sm:px-2.5 sm:py-2 rounded-xl shadow-xl flex items-center gap-1.5 text-xs text-slate-200 hover:text-white transition-all cursor-pointer backdrop-blur-md"
             title="Cambia stile mappa (Occidentale / Satellite / Dark)"
           >
             <Layers className="w-3.5 h-3.5 text-indigo-400" />
-            <span className="font-semibold">{MAP_STYLES[mapStyle].name}</span>
+            <span className="hidden sm:inline font-semibold">{MAP_STYLES[mapStyle].name}</span>
           </button>
 
           {showLayerMenu && (
-            <div className="absolute right-0 top-11 w-52 bg-slate-900 border border-slate-700/90 rounded-xl p-1 shadow-2xl z-50 space-y-0.5">
+            <div className="absolute right-0 top-11 w-48 sm:w-52 bg-slate-900 border border-slate-700/90 rounded-xl p-1 shadow-2xl z-50 space-y-0.5">
               {(Object.keys(MAP_STYLES) as MapStyle[]).map((key) => (
                 <button
                   key={key}
@@ -495,8 +495,8 @@ export const Map: React.FC<MapProps> = ({
                       : 'text-slate-300 hover:bg-slate-800 hover:text-white'
                   }`}
                 >
-                  <span>{MAP_STYLES[key].name}</span>
-                  {mapStyle === key && <Check className="w-3 h-3 text-white" />}
+                  <span className="truncate">{MAP_STYLES[key].name}</span>
+                  {mapStyle === key && <Check className="w-3 h-3 text-white shrink-0 ml-1" />}
                 </button>
               ))}
             </div>
@@ -506,11 +506,11 @@ export const Map: React.FC<MapProps> = ({
         {onFitRoute && waypoints.length > 0 && (
           <button
             onClick={onFitRoute}
-            className="bg-slate-900/90 hover:bg-slate-800 border border-slate-700/80 px-3 py-2 rounded-xl shadow-xl flex items-center gap-2 text-xs text-slate-200 hover:text-white transition-all cursor-pointer"
+            className="bg-slate-900/90 hover:bg-slate-800 border border-slate-700/80 p-2 sm:px-3 sm:py-2 rounded-xl shadow-xl flex items-center gap-1.5 text-xs text-slate-200 hover:text-white transition-all cursor-pointer backdrop-blur-md"
             title="Inquadra tutto l'itinerario sulla mappa"
           >
             <Maximize2 className="w-3.5 h-3.5 text-indigo-400" />
-            <span className="font-semibold">Centra Itinerario</span>
+            <span className="hidden sm:inline font-semibold">Centra Itinerario</span>
           </button>
         )}
 

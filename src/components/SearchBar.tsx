@@ -182,7 +182,7 @@ export const SearchBar: React.FC<SearchBarProps> = ({
               ? `Cerca vicino a ${proximityLocation.label || 'tappa precedente'}...`
               : 'Cerca qualsiasi POI, monte, parco, ristorante o città...'
           }
-          className="w-full bg-transparent py-2.5 pr-8 text-xs text-white placeholder-slate-400 focus:outline-none"
+          className="w-full bg-transparent py-2.5 pr-8 text-base sm:text-xs text-white placeholder-slate-400 focus:outline-none"
         />
 
         {query && (
