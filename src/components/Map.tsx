@@ -47,14 +47,56 @@ interface MapProps {
   selectedWaypointId?: string | null;
 }
 
+// Map Invalidator & Resizer Component: ensures Leaflet container bounds are always synced with DOM
+function MapResizer() {
+  const map = useMap();
+
+  useEffect(() => {
+    // Invalidate size immediately and after layout settling
+    map.invalidateSize();
+    const timer1 = setTimeout(() => map.invalidateSize(), 100);
+    const timer2 = setTimeout(() => map.invalidateSize(), 300);
+    const timer3 = setTimeout(() => map.invalidateSize(), 600);
+
+    const container = map.getContainer();
+    let resizeObserver: ResizeObserver | null = null;
+    if (container && typeof ResizeObserver !== 'undefined') {
+      resizeObserver = new ResizeObserver(() => {
+        map.invalidateSize();
+      });
+      resizeObserver.observe(container);
+    }
+
+    const handleWindowResize = () => {
+      map.invalidateSize();
+    };
+    window.addEventListener('resize', handleWindowResize);
+
+    return () => {
+      clearTimeout(timer1);
+      clearTimeout(timer2);
+      clearTimeout(timer3);
+      if (resizeObserver) resizeObserver.disconnect();
+      window.removeEventListener('resize', handleWindowResize);
+    };
+  }, [map]);
+
+  return null;
+}
+
 // Map Click Listener Component: opens confirmation popup at clicked point
 function MapEvents({
   onMapClick,
 }: {
   onMapClick: (coords: { lat: number; lng: number }) => void;
 }) {
+  const map = useMap();
+
   useMapEvents({
     click(e) {
+      // Sync map container size just in case before handling click
+      map.invalidateSize({ debounceMoveend: true });
+
       // Avoid firing map click if the click originated inside a popup, control, or button
       const target = e.originalEvent?.target as HTMLElement | null;
       if (
@@ -113,49 +155,55 @@ function createWaypointIcon(
   let bgGradient = 'from-indigo-600 to-blue-600 border-indigo-300';
   let badgeContent = `${index + 1}`;
   let ringColor = 'ring-indigo-400/40';
+  let pointerBg = 'bg-blue-600';
 
   if (category === 'poi') {
     bgGradient = 'from-amber-500 to-yellow-600 border-amber-200';
     badgeContent = '🏔️';
     ringColor = 'ring-amber-400/60 shadow-amber-500/50';
+    pointerBg = 'bg-yellow-600';
   } else if (category === 'parking') {
     bgGradient = 'from-blue-600 to-cyan-700 border-blue-200';
     badgeContent = '🅿️';
     ringColor = 'ring-blue-400/60 shadow-blue-500/50';
+    pointerBg = 'bg-cyan-700';
   } else if (category === 'stay') {
     bgGradient = 'from-purple-600 to-indigo-700 border-purple-200';
     badgeContent = '🛏️';
     ringColor = 'ring-purple-400/60 shadow-purple-500/50';
+    pointerBg = 'bg-indigo-700';
   } else {
     // Standard waypoint
     if (isStart) {
       bgGradient = 'from-emerald-500 to-teal-600 border-emerald-200';
       badgeContent = '1';
       ringColor = 'ring-emerald-400/50';
+      pointerBg = 'bg-teal-600';
     } else if (isEnd) {
       bgGradient = 'from-rose-500 to-red-600 border-rose-200';
       badgeContent = '🏁';
       ringColor = 'ring-rose-400/50';
+      pointerBg = 'bg-red-600';
     }
   }
 
-  const selectedRing = isSelected ? 'scale-110 ring-4 ring-white' : '';
+  const selectedClass = isSelected ? 'scale-110 ring-4 ring-white shadow-2xl' : '';
 
   const html = `
-    <div class="custom-waypoint-pin group relative flex items-center justify-center -translate-x-1/2 -translate-y-full cursor-pointer">
-      <div class="relative flex items-center justify-center w-8 h-8 rounded-full bg-gradient-to-tr ${bgGradient} text-white font-bold text-xs shadow-xl border-2 ${ringColor} ring-4 transition-all duration-150 ${selectedRing}">
+    <div class="custom-waypoint-pin cursor-pointer ${selectedClass}">
+      <div class="relative flex items-center justify-center w-8 h-8 rounded-full bg-gradient-to-tr ${bgGradient} text-white font-bold text-xs shadow-xl border-2 ${ringColor} ring-4 transition-all duration-150">
         <span class="leading-none select-none">${badgeContent}</span>
       </div>
-      <div class="absolute -bottom-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-slate-900 rotate-45 border-r border-b border-slate-700"></div>
+      <div class="-mt-1 w-2.5 h-2.5 ${pointerBg} rotate-45 border-r border-b border-white/60"></div>
     </div>
   `;
 
   return L.divIcon({
-    className: 'custom-leaflet-marker',
+    className: 'custom-leaflet-marker bg-transparent border-0',
     html,
     iconSize: [32, 40],
-    iconAnchor: [16, 38],
-    popupAnchor: [0, -36],
+    iconAnchor: [16, 40],
+    popupAnchor: [0, -42],
   });
 }
 
@@ -171,20 +219,20 @@ function createPendingPreviewIcon(category: WaypointCategory) {
       : '➕';
 
   const html = `
-    <div class="relative flex items-center justify-center -translate-x-1/2 -translate-y-full cursor-pointer">
+    <div class="custom-waypoint-pin cursor-pointer">
       <div class="relative flex items-center justify-center w-8 h-8 rounded-full bg-gradient-to-tr from-emerald-500 to-teal-500 text-white font-bold text-xs shadow-2xl border-2 border-white ring-4 ring-emerald-400/50">
         <span class="leading-none select-none">${iconEmoji}</span>
       </div>
-      <div class="absolute -bottom-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-emerald-500 rotate-45"></div>
+      <div class="-mt-1 w-2.5 h-2.5 bg-teal-500 rotate-45 border-r border-b border-white"></div>
     </div>
   `;
 
   return L.divIcon({
-    className: 'pending-leaflet-marker',
+    className: 'pending-leaflet-marker bg-transparent border-0',
     html,
     iconSize: [32, 40],
-    iconAnchor: [16, 38],
-    popupAnchor: [0, -36],
+    iconAnchor: [16, 40],
+    popupAnchor: [0, -42],
   });
 }
 
@@ -272,6 +320,9 @@ export const Map: React.FC<MapProps> = ({
         className="w-full h-full z-0"
         zoomControl={false}
       >
+        {/* Dynamic Resize & Container Bounds Synchronizer */}
+        <MapResizer />
+
         <TileLayer
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors | OSRM'
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
