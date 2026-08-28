@@ -108,7 +108,7 @@ export function App() {
     });
   }, []);
 
-  // Swap two days (e.g. Day 1 with Day 3)
+  // Swap two days (e.g. Day 1 with Day 3) and maintain focus on the swapped day
   const handleSwapDays = useCallback((dayA: number, dayB: number) => {
     if (dayA === dayB) return;
     setWaypoints((prev) =>
@@ -119,6 +119,13 @@ export function App() {
         return w;
       })
     );
+
+    // Follow the swapped day to its new index so the user remains on the day they just moved
+    setActiveDayTab((prev) => {
+      if (prev === dayA) return dayB;
+      if (prev === dayB) return dayA;
+      return dayB;
+    });
   }, []);
 
   // Change single waypoint's day
