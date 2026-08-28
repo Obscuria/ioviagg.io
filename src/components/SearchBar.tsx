@@ -11,6 +11,7 @@ import {
   Bed,
   Sparkles,
   Plus,
+  Utensils,
 } from 'lucide-react';
 
 interface SearchBarProps {
@@ -26,6 +27,8 @@ export function CategoryIcon({
   className?: string;
 }) {
   switch (category) {
+    case 'food':
+      return <Utensils className={`${className} text-orange-400`} />;
     case 'poi':
       return <Mountain className={`${className} text-amber-400`} />;
     case 'parking':
@@ -45,6 +48,13 @@ export function CategoryBadge({
   label?: string;
 }) {
   switch (category) {
+    case 'food':
+      return (
+        <span className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full bg-orange-500/20 text-orange-300 border border-orange-500/30">
+          <Utensils className="w-3 h-3 text-orange-400" />
+          <span>{label || 'Ristoro / Cibo'}</span>
+        </span>
+      );
     case 'poi':
       return (
         <span className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">

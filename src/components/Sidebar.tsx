@@ -4,6 +4,7 @@ import type {
   RouteData,
   TripPreset,
   WaypointCategory,
+  RouteLeg,
 } from '../types/trip';
 import { TRIP_PRESETS } from '../data/presets';
 import { CategoryBadge } from './SearchBar';
@@ -24,6 +25,9 @@ import {
   SquareParking,
   Bed,
   Mountain,
+  Utensils,
+  Plus,
+  Minus,
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -34,6 +38,7 @@ interface SidebarProps {
   onRemoveWaypoint: (id: string) => void;
   onReorderWaypoint: (index: number, direction: 'up' | 'down') => void;
   onChangeCategory: (id: string, category: WaypointCategory) => void;
+  onChangeStopDuration: (id: string, durationMinutes: number) => void;
   onClearTrip: () => void;
   onLoadPreset: (preset: TripPreset) => void;
   isLoading: boolean;
@@ -52,7 +57,57 @@ function formatDuration(minutes: number): string {
   return remainingMins > 0 ? `${hours}h ${remainingMins}m` : `${hours}h`;
 }
 
-// Utility: compute ETA from departure time + driving duration + stop durations
+// Utility: format minutes from midnight into "HH:MM"
+function formatTimeOfDay(totalMinutes: number): string {
+  const normalized = ((Math.floor(totalMinutes) % 1440) + 1440) % 1440;
+  const hours = Math.floor(normalized / 60);
+  const minutes = normalized % 60;
+  return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+}
+
+// Schedule info for each waypoint
+interface WaypointSchedule {
+  arrivalTime?: string;
+  departureTime?: string;
+}
+
+function calculateWaypointSchedules(
+  departureTime: string,
+  waypoints: Waypoint[],
+  legs: RouteLeg[] | undefined
+): WaypointSchedule[] {
+  const [depH, depM] = departureTime.split(':').map(Number);
+  if (isNaN(depH) || isNaN(depM)) return waypoints.map(() => ({}));
+
+  let currentMinutes = depH * 60 + depM;
+  const schedules: WaypointSchedule[] = [];
+
+  for (let i = 0; i < waypoints.length; i++) {
+    const wp = waypoints[i];
+    if (i === 0) {
+      const depStr = formatTimeOfDay(currentMinutes);
+      schedules.push({ departureTime: depStr });
+    } else {
+      const leg = legs && legs[i - 1];
+      const legDuration = leg ? leg.durationMinutes : 0;
+      currentMinutes += legDuration;
+      const arrStr = formatTimeOfDay(currentMinutes);
+
+      const stopMin = wp.stopDurationMin || 0;
+      currentMinutes += stopMin;
+      const depStr = i === waypoints.length - 1 ? undefined : formatTimeOfDay(currentMinutes);
+
+      schedules.push({
+        arrivalTime: arrStr,
+        departureTime: depStr,
+      });
+    }
+  }
+
+  return schedules;
+}
+
+// Utility: compute overall ETA from departure time + driving duration + stop durations
 function computeETA(departureTime: string, drivingMinutes: number, waypoints: Waypoint[]): string {
   const [depHours, depMins] = departureTime.split(':').map(Number);
   if (isNaN(depHours) || isNaN(depMins)) return '--:--';
@@ -60,11 +115,7 @@ function computeETA(departureTime: string, drivingMinutes: number, waypoints: Wa
   const totalStopMinutes = waypoints.reduce((acc, w) => acc + (w.stopDurationMin || 0), 0);
   const totalTripMinutes = drivingMinutes + totalStopMinutes;
 
-  const totalMinutes = depHours * 60 + depMins + totalTripMinutes;
-  const arrivalHours = Math.floor(totalMinutes / 60) % 24;
-  const arrivalMinutes = totalMinutes % 60;
-
-  return `${String(arrivalHours).padStart(2, '0')}:${String(arrivalMinutes).padStart(2, '0')}`;
+  return formatTimeOfDay(depHours * 60 + depMins + totalTripMinutes);
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -75,6 +126,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onRemoveWaypoint,
   onReorderWaypoint,
   onChangeCategory,
+  onChangeStopDuration,
   onClearTrip,
   onLoadPreset,
   isLoading,
@@ -85,17 +137,26 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const totalStops = waypoints.length;
   const hasRoute = routeData !== null && waypoints.length >= 2;
 
+  const totalStopMinutes = waypoints.reduce((acc, w) => acc + (w.stopDurationMin || 0), 0);
+
   const eta = hasRoute
     ? computeETA(departureTime, routeData.durationMinutes, waypoints)
     : '--:--';
 
+  const schedules = calculateWaypointSchedules(
+    departureTime,
+    waypoints,
+    routeData?.legs
+  );
+
   // Category counts
+  const foodCount = waypoints.filter((w) => w.category === 'food').length;
   const poiCount = waypoints.filter((w) => w.category === 'poi').length;
   const parkingCount = waypoints.filter((w) => w.category === 'parking').length;
   const stayCount = waypoints.filter((w) => w.category === 'stay').length;
 
   return (
-    <aside className="w-full md:w-[420px] lg:w-[460px] h-full flex flex-col bg-slate-900/95 border-r border-slate-800 text-slate-100 backdrop-blur-xl z-20 shrink-0">
+    <aside className="w-full md:w-[430px] lg:w-[470px] h-full flex flex-col bg-slate-900/95 border-r border-slate-800 text-slate-100 backdrop-blur-xl z-20 shrink-0 select-none">
       {/* Header / Brand */}
       <div className="p-4 sm:p-5 border-b border-slate-800 flex items-center justify-between">
         <div className="flex items-center gap-3">
@@ -125,30 +186,43 @@ export const Sidebar: React.FC<SidebarProps> = ({
       {/* Trip Summary & Stats Card */}
       <div className="p-4 sm:p-5 border-b border-slate-800 bg-slate-950/40 space-y-4">
         {/* Main Stats Grid */}
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-3 gap-2 sm:gap-3">
           {/* Distance */}
-          <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-3 flex flex-col justify-between">
-            <div className="flex items-center justify-between text-slate-400 text-xs">
-              <span>Distanza Totale</span>
-              <Car className="w-4 h-4 text-indigo-400" />
+          <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-2.5 sm:p-3 flex flex-col justify-between">
+            <div className="flex items-center justify-between text-slate-400 text-[11px]">
+              <span>Distanza</span>
+              <Car className="w-3.5 h-3.5 text-indigo-400" />
             </div>
-            <div className="mt-2">
-              <span className="text-2xl font-bold tracking-tight text-white font-mono">
+            <div className="mt-1.5">
+              <span className="text-xl sm:text-2xl font-bold tracking-tight text-white font-mono">
                 {hasRoute ? routeData.distanceKm : '0'}
               </span>
-              <span className="text-xs text-slate-400 ml-1.5 font-medium">km</span>
+              <span className="text-[11px] text-slate-400 ml-1 font-medium">km</span>
             </div>
           </div>
 
           {/* Driving Time */}
-          <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-3 flex flex-col justify-between">
-            <div className="flex items-center justify-between text-slate-400 text-xs">
-              <span>Tempo Guida</span>
-              <Clock className="w-4 h-4 text-sky-400" />
+          <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-2.5 sm:p-3 flex flex-col justify-between">
+            <div className="flex items-center justify-between text-slate-400 text-[11px]">
+              <span>Guida</span>
+              <Clock className="w-3.5 h-3.5 text-sky-400" />
             </div>
-            <div className="mt-2">
-              <span className="text-2xl font-bold tracking-tight text-white font-mono">
+            <div className="mt-1.5">
+              <span className="text-xl sm:text-2xl font-bold tracking-tight text-white font-mono">
                 {hasRoute ? formatDuration(routeData.durationMinutes) : '0m'}
+              </span>
+            </div>
+          </div>
+
+          {/* Stop / Rest Time */}
+          <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-2.5 sm:p-3 flex flex-col justify-between">
+            <div className="flex items-center justify-between text-slate-400 text-[11px]">
+              <span>Soste Tot.</span>
+              <Utensils className="w-3.5 h-3.5 text-orange-400" />
+            </div>
+            <div className="mt-1.5">
+              <span className="text-xl sm:text-2xl font-bold tracking-tight text-orange-300 font-mono">
+                {formatDuration(totalStopMinutes)}
               </span>
             </div>
           </div>
@@ -157,8 +231,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {/* Schedule & ETA Controls */}
         <div className="bg-slate-800/40 border border-slate-700/40 rounded-xl p-3 flex items-center justify-between gap-4">
           <div className="flex items-center gap-2">
-            <label htmlFor="departure-time" className="text-xs text-slate-300 font-medium">
-              Partenza:
+            <label htmlFor="departure-time" className="text-xs text-slate-300 font-medium flex items-center gap-1">
+              <Clock className="w-3.5 h-3.5 text-indigo-400" />
+              <span>Partenza:</span>
             </label>
             <input
               id="departure-time"
@@ -171,31 +246,36 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
           <div className="flex items-center gap-1.5 text-xs text-slate-300">
             <ArrowRight className="w-3.5 h-3.5 text-slate-500" />
-            <span className="text-slate-400">Arrivo stimato:</span>
+            <span className="text-slate-400">Arrivo Stimato:</span>
             <span className="font-bold text-emerald-400 font-mono text-sm">{eta}</span>
           </div>
         </div>
 
-        {/* POI & Category Breakdown Chips */}
+        {/* Category Breakdown Chips */}
         {waypoints.length > 0 && (
-          <div className="flex items-center gap-2 flex-wrap text-[11px]">
-            <span className="text-slate-400 font-medium">Tipologie:</span>
+          <div className="flex items-center gap-1.5 flex-wrap text-[10px]">
+            <span className="text-slate-400 font-medium">Filtro tappe:</span>
             <span className="px-2 py-0.5 rounded-md bg-slate-800 border border-slate-700 text-slate-300">
-              {totalStops} tappe tot.
+              {totalStops} tappe
             </span>
+            {foodCount > 0 && (
+              <span className="px-2 py-0.5 rounded-md bg-orange-500/20 border border-orange-500/30 text-orange-300 font-medium flex items-center gap-1">
+                <Utensils className="w-2.5 h-2.5" /> {foodCount} Ristoro
+              </span>
+            )}
             {poiCount > 0 && (
               <span className="px-2 py-0.5 rounded-md bg-amber-500/20 border border-amber-500/30 text-amber-300 font-medium flex items-center gap-1">
-                <Mountain className="w-3 h-3" /> {poiCount} POI / Natura
+                <Mountain className="w-2.5 h-2.5" /> {poiCount} POI
               </span>
             )}
             {parkingCount > 0 && (
               <span className="px-2 py-0.5 rounded-md bg-blue-500/20 border border-blue-500/30 text-blue-300 font-medium flex items-center gap-1">
-                <SquareParking className="w-3 h-3" /> {parkingCount} Parcheggi
+                <SquareParking className="w-2.5 h-2.5" /> {parkingCount} Park
               </span>
             )}
             {stayCount > 0 && (
               <span className="px-2 py-0.5 rounded-md bg-purple-500/20 border border-purple-500/30 text-purple-300 font-medium flex items-center gap-1">
-                <Bed className="w-3 h-3" /> {stayCount} Pernottamenti
+                <Bed className="w-2.5 h-2.5" /> {stayCount} Notte
               </span>
             )}
           </div>
@@ -227,7 +307,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         <div className="flex items-center gap-2">
           <MapPin className="w-4 h-4 text-indigo-400" />
           <span className="text-xs font-bold uppercase tracking-wider text-slate-300">
-            Itinerario Tappe
+            Timeline & Tappe Viaggio
           </span>
           <span className="text-xs px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 font-mono">
             {totalStops}
@@ -259,7 +339,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <div>
             <p className="font-semibold">Aggiungi la destinazione</p>
             <p className="text-amber-200/80 mt-0.5">
-              Hai impostato 1 solo punto. Cerca un punto di interesse in alto o clicca sulla mappa per aggiungere altre tappe.
+              Hai impostato 1 solo punto. Cerca un ristorante, POI o città in alto, oppure clicca direttamente sulla mappa per aggiungere altre tappe.
             </p>
           </div>
         </div>
@@ -272,7 +352,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </div>
           <h3 className="font-semibold text-sm text-slate-200">Nessuna tappa inserita</h3>
           <p className="text-xs text-slate-400 mt-1 max-w-[260px]">
-            Cerca qualsiasi località, monte o attrazione nella barra di ricerca in alto, oppure clicca sulla mappa.
+            Cerca qualsiasi località, ristorante o attrazione nella barra in alto, oppure clicca su un punto della mappa.
           </p>
         </div>
       )}
@@ -284,6 +364,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
           const isEnd = index === totalStops - 1 && totalStops > 1;
           const isSelected = waypoint.id === selectedWaypointId;
           const category = waypoint.category || 'standard';
+          const schedule = schedules[index];
+          const currentDuration = waypoint.stopDurationMin || 0;
 
           // Leg info to reach next waypoint
           const leg = hasRoute && routeData.legs && routeData.legs[index];
@@ -294,7 +376,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 onClick={() => onSelectWaypoint(isSelected ? null : waypoint.id)}
                 className={`group relative rounded-xl border p-3 transition-all cursor-pointer ${
                   isSelected
-                    ? 'bg-indigo-950/40 border-indigo-500 ring-1 ring-indigo-500/50'
+                    ? 'bg-indigo-950/40 border-indigo-500 ring-1 ring-indigo-500/50 shadow-lg shadow-indigo-950/50'
                     : 'bg-slate-800/60 hover:bg-slate-800/90 border-slate-700/60 hover:border-slate-600'
                 }`}
               >
@@ -303,7 +385,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   <div className="flex flex-col items-center pt-0.5">
                     <div
                       className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white shadow-md transition-transform ${
-                        category === 'poi'
+                        category === 'food'
+                          ? 'bg-orange-600 ring-2 ring-orange-400/50'
+                          : category === 'poi'
                           ? 'bg-amber-600 ring-2 ring-amber-400/50'
                           : category === 'parking'
                           ? 'bg-blue-600 ring-2 ring-blue-400/50'
@@ -316,7 +400,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
                           : 'bg-indigo-600 ring-2 ring-indigo-400/40'
                       }`}
                     >
-                      {category === 'poi' ? (
+                      {category === 'food' ? (
+                        '🍽️'
+                      ) : category === 'poi' ? (
                         '🏔️'
                       ) : category === 'parking' ? (
                         '🅿️'
@@ -386,50 +472,143 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       </p>
                     )}
 
+                    {/* Timeline & Schedule Pill (Furkot Style) */}
+                    {hasRoute && (
+                      <div className="mt-2 py-1 px-2 rounded-lg bg-slate-900/80 border border-slate-700/50 flex items-center justify-between text-[11px] font-mono">
+                        {isStart ? (
+                          <span className="text-emerald-400 font-semibold flex items-center gap-1">
+                            <span>🚀 Partenza:</span>
+                            <span>{schedule?.departureTime || departureTime}</span>
+                          </span>
+                        ) : isEnd ? (
+                          <span className="text-rose-400 font-semibold flex items-center gap-1">
+                            <span>🏁 Arrivo finale:</span>
+                            <span>{schedule?.arrivalTime || '--:--'}</span>
+                          </span>
+                        ) : (
+                          <div className="w-full flex items-center justify-between text-slate-300">
+                            <span className="text-sky-300">Arr: {schedule?.arrivalTime || '--:--'}</span>
+                            <span className="text-slate-500">•</span>
+                            <span className="text-orange-300">Sosta: {currentDuration}m</span>
+                            <span className="text-slate-500">•</span>
+                            <span className="text-emerald-300">Rip: {schedule?.departureTime || '--:--'}</span>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Stop Duration Controls (Interactive Stepper & Presets) */}
+                    {!isStart && (
+                      <div
+                        className="mt-2 pt-2 border-t border-slate-700/40 space-y-1.5"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <div className="flex items-center justify-between text-[11px]">
+                          <span className="text-slate-400 font-medium flex items-center gap-1">
+                            <Clock className="w-3 h-3 text-orange-400" />
+                            <span>Durata Sosta:</span>
+                          </span>
+
+                          {/* Stepper Buttons */}
+                          <div className="flex items-center gap-1">
+                            <button
+                              onClick={() => onChangeStopDuration(waypoint.id, Math.max(0, currentDuration - 15))}
+                              className="p-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors"
+                              title="-15 minuti"
+                            >
+                              <Minus className="w-3 h-3" />
+                            </button>
+                            <span className="font-mono font-bold text-xs text-orange-300 px-1.5 min-w-[52px] text-center">
+                              {formatDuration(currentDuration)}
+                            </span>
+                            <button
+                              onClick={() => onChangeStopDuration(waypoint.id, currentDuration + 15)}
+                              className="p-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors"
+                              title="+15 minuti"
+                            >
+                              <Plus className="w-3 h-3" />
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Quick Presets */}
+                        <div className="grid grid-cols-6 gap-1 text-[10px]">
+                          {[15, 30, 45, 60, 120, 480].map((mins) => (
+                            <button
+                              key={mins}
+                              onClick={() => onChangeStopDuration(waypoint.id, mins)}
+                              className={`py-0.5 rounded text-center transition-all ${
+                                currentDuration === mins
+                                  ? 'bg-orange-500 text-white font-bold shadow-sm'
+                                  : 'bg-slate-800/80 text-slate-400 hover:bg-slate-700 hover:text-slate-200'
+                              }`}
+                            >
+                              {mins >= 60 ? `${mins / 60}h` : `${mins}m`}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
                     {/* Category Type Switcher Pills */}
                     <div
-                      className="mt-2.5 pt-2 border-t border-slate-700/40 flex items-center gap-1"
+                      className="mt-2.5 pt-2 border-t border-slate-700/40 grid grid-cols-5 gap-1"
                       onClick={(e) => e.stopPropagation()}
                     >
                       <button
                         onClick={() => onChangeCategory(waypoint.id, 'standard')}
-                        className={`text-[10px] px-2 py-0.5 rounded-md transition-all ${
+                        className={`text-[10px] py-1 px-1 rounded-md text-center transition-all ${
                           category === 'standard'
                             ? 'bg-emerald-500/25 text-emerald-300 font-semibold border border-emerald-500/40'
                             : 'bg-slate-800/80 text-slate-400 hover:text-white'
                         }`}
+                        title="Tappa Base"
                       >
-                        Standard
+                        📍 Base
+                      </button>
+                      <button
+                        onClick={() => onChangeCategory(waypoint.id, 'food')}
+                        className={`text-[10px] py-1 px-1 rounded-md text-center transition-all ${
+                          category === 'food'
+                            ? 'bg-orange-500/25 text-orange-300 font-semibold border border-orange-500/40'
+                            : 'bg-slate-800/80 text-slate-400 hover:text-white'
+                        }`}
+                        title="Ristoro / Cibo"
+                      >
+                        🍽️ Cibo
                       </button>
                       <button
                         onClick={() => onChangeCategory(waypoint.id, 'poi')}
-                        className={`text-[10px] px-2 py-0.5 rounded-md transition-all ${
+                        className={`text-[10px] py-1 px-1 rounded-md text-center transition-all ${
                           category === 'poi'
                             ? 'bg-amber-500/25 text-amber-300 font-semibold border border-amber-500/40'
                             : 'bg-slate-800/80 text-slate-400 hover:text-white'
                         }`}
+                        title="Punto di Interesse"
                       >
-                        POI / Natura
+                        🏔️ POI
                       </button>
                       <button
                         onClick={() => onChangeCategory(waypoint.id, 'parking')}
-                        className={`text-[10px] px-2 py-0.5 rounded-md transition-all ${
+                        className={`text-[10px] py-1 px-1 rounded-md text-center transition-all ${
                           category === 'parking'
                             ? 'bg-blue-500/25 text-blue-300 font-semibold border border-blue-500/40'
                             : 'bg-slate-800/80 text-slate-400 hover:text-white'
                         }`}
+                        title="Parcheggio"
                       >
-                        Parcheggio
+                        🅿️ Park
                       </button>
                       <button
                         onClick={() => onChangeCategory(waypoint.id, 'stay')}
-                        className={`text-[10px] px-2 py-0.5 rounded-md transition-all ${
+                        className={`text-[10px] py-1 px-1 rounded-md text-center transition-all ${
                           category === 'stay'
                             ? 'bg-purple-500/25 text-purple-300 font-semibold border border-purple-500/40'
                             : 'bg-slate-800/80 text-slate-400 hover:text-white'
                         }`}
+                        title="Pernottamento"
                       >
-                        Notte
+                        🛏️ Notte
                       </button>
                     </div>
                   </div>
@@ -443,7 +622,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     <Car className="w-3.5 h-3.5 text-indigo-400" />
                     <span>{leg.distanceKm} km</span>
                     <span>•</span>
-                    <span>{formatDuration(leg.durationMinutes)}</span>
+                    <span>{formatDuration(leg.durationMinutes)} guida</span>
                   </div>
                   {leg.summary && (
                     <span className="text-[11px] text-slate-500 truncate max-w-[140px] font-mono">
@@ -459,9 +638,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
       {/* Footer Info */}
       <div className="p-3 border-t border-slate-800/80 bg-slate-950/60 text-[11px] text-slate-400 flex items-center justify-between">
-        <span>OSRM Driving API</span>
-        <span className="font-mono text-slate-400">Photon + OSM POI Engine</span>
+        <span>OSRM Routing Engine</span>
+        <span className="font-mono text-slate-400">Overpass OSM POIs</span>
       </div>
     </aside>
   );
 };
+

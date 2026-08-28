@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import {
   MapContainer,
   TileLayer,
@@ -12,6 +12,7 @@ import L from 'leaflet';
 import type { Waypoint, RouteData, SearchResult, WaypointCategory } from '../types/trip';
 import { SearchBar, CategoryBadge } from './SearchBar';
 import { reverseGeocode } from '../services/osrm';
+import { fetchPOIsInBounds, type MapPOI, type MapBounds } from '../services/poi';
 import {
   Trash2,
   Clock,
@@ -20,6 +21,11 @@ import {
   Sparkles,
   Loader2,
   Check,
+  Plus,
+  Minus,
+  Eye,
+  EyeOff,
+  Layers,
 } from 'lucide-react';
 
 interface PendingPoint {
@@ -28,6 +34,7 @@ interface PendingPoint {
   title: string;
   address?: string;
   category: WaypointCategory;
+  stopDurationMin: number;
   isLoading: boolean;
 }
 
@@ -40,10 +47,12 @@ interface MapProps {
     title?: string;
     address?: string;
     category?: WaypointCategory;
+    stopDurationMin?: number;
   }) => void;
   onRemoveWaypoint: (id: string) => void;
   onSelectSearchResult: (result: SearchResult) => void;
   onChangeCategory: (id: string, category: WaypointCategory) => void;
+  onChangeStopDuration?: (id: string, durationMinutes: number) => void;
   selectedWaypointId?: string | null;
 }
 
@@ -157,7 +166,12 @@ function createWaypointIcon(
   let ringColor = 'ring-indigo-400/40';
   let pointerBg = 'bg-blue-600';
 
-  if (category === 'poi') {
+  if (category === 'food') {
+    bgGradient = 'from-orange-500 to-amber-600 border-orange-200';
+    badgeContent = '🍽️';
+    ringColor = 'ring-orange-400/60 shadow-orange-500/50';
+    pointerBg = 'bg-orange-600';
+  } else if (category === 'poi') {
     bgGradient = 'from-amber-500 to-yellow-600 border-amber-200';
     badgeContent = '🏔️';
     ringColor = 'ring-amber-400/60 shadow-amber-500/50';
@@ -210,7 +224,9 @@ function createWaypointIcon(
 // Clean static icon for pending preview marker
 function createPendingPreviewIcon(category: WaypointCategory) {
   const iconEmoji =
-    category === 'poi'
+    category === 'food'
+      ? '🍽️'
+      : category === 'poi'
       ? '🏔️'
       : category === 'parking'
       ? '🅿️'
@@ -236,6 +252,98 @@ function createPendingPreviewIcon(category: WaypointCategory) {
   });
 }
 
+// Discovered OSM POI mini marker icon for interactive map discovery
+function createDiscoveredPOIIcon(poi: MapPOI) {
+  let bg = 'from-slate-700 to-slate-800 border-slate-500 ring-slate-400/30';
+  if (poi.category === 'food') {
+    bg = 'from-orange-500 to-amber-600 border-orange-300 ring-orange-400/50 shadow-orange-500/40';
+  } else if (poi.category === 'poi') {
+    bg = 'from-amber-500 to-yellow-600 border-amber-300 ring-amber-400/50 shadow-amber-500/40';
+  } else if (poi.category === 'parking') {
+    bg = 'from-blue-600 to-cyan-600 border-blue-300 ring-blue-400/50 shadow-blue-500/40';
+  } else if (poi.category === 'stay') {
+    bg = 'from-purple-600 to-indigo-600 border-purple-300 ring-purple-400/50 shadow-purple-500/40';
+  }
+
+  const html = `
+    <div class="group relative flex items-center justify-center cursor-pointer transition-transform hover:scale-125 duration-150">
+      <div class="w-7 h-7 rounded-full bg-gradient-to-tr ${bg} text-white font-bold text-[11px] shadow-lg border-2 ring-2 flex items-center justify-center">
+        <span class="leading-none select-none">${poi.icon}</span>
+      </div>
+    </div>
+  `;
+
+  return L.divIcon({
+    className: 'bg-transparent border-0',
+    html,
+    iconSize: [28, 28],
+    iconAnchor: [14, 14],
+    popupAnchor: [0, -16],
+  });
+}
+
+// Interactive Map POIs Discovery Component (Fetches when zoom >= 13)
+function MapPOIDiscoveryController({
+  onPOIsLoaded,
+  onZoomChange,
+  showPOIs,
+}: {
+  onPOIsLoaded: (pois: MapPOI[], isLoading: boolean) => void;
+  onZoomChange: (zoom: number) => void;
+  showPOIs: boolean;
+}) {
+  const map = useMap();
+  const fetchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const fetchCurrentBounds = useCallback(async () => {
+    const zoom = map.getZoom();
+    onZoomChange(zoom);
+
+    if (!showPOIs || zoom < 13) {
+      onPOIsLoaded([], false);
+      return;
+    }
+
+    onPOIsLoaded([], true);
+
+    const b = map.getBounds();
+    const bounds: MapBounds = {
+      south: b.getSouth(),
+      west: b.getWest(),
+      north: b.getNorth(),
+      east: b.getEast(),
+    };
+
+    try {
+      const results = await fetchPOIsInBounds(bounds, 45);
+      onPOIsLoaded(results, false);
+    } catch {
+      onPOIsLoaded([], false);
+    }
+  }, [map, showPOIs, onPOIsLoaded, onZoomChange]);
+
+  useEffect(() => {
+    if (fetchTimeoutRef.current) clearTimeout(fetchTimeoutRef.current);
+    fetchTimeoutRef.current = setTimeout(fetchCurrentBounds, 350);
+
+    const onMoveEnd = () => {
+      if (fetchTimeoutRef.current) clearTimeout(fetchTimeoutRef.current);
+      fetchTimeoutRef.current = setTimeout(fetchCurrentBounds, 400);
+    };
+
+    map.on('moveend', onMoveEnd);
+    map.on('zoomend', onMoveEnd);
+
+    return () => {
+      if (fetchTimeoutRef.current) clearTimeout(fetchTimeoutRef.current);
+      map.off('moveend', onMoveEnd);
+      map.off('zoomend', onMoveEnd);
+    };
+  }, [map, fetchCurrentBounds]);
+
+  return null;
+}
+
 export const Map: React.FC<MapProps> = ({
   waypoints,
   routeData,
@@ -243,6 +351,7 @@ export const Map: React.FC<MapProps> = ({
   onRemoveWaypoint,
   onSelectSearchResult,
   onChangeCategory,
+  onChangeStopDuration,
   selectedWaypointId,
 }) => {
   const defaultCenter: [number, number] = [42.5, 12.5];
@@ -251,6 +360,18 @@ export const Map: React.FC<MapProps> = ({
   // Pending point state for click confirmation
   const [pendingPoint, setPendingPoint] = useState<PendingPoint | null>(null);
 
+  // Discovered Map POIs state
+  const [discoveredPOIs, setDiscoveredPOIs] = useState<MapPOI[]>([]);
+  const [isLoadingPOIs, setIsLoadingPOIs] = useState<boolean>(false);
+  const [currentZoom, setCurrentZoom] = useState<number>(defaultZoom);
+  const [showPOILayer, setShowPOILayer] = useState<boolean>(true);
+
+  // Handle POIs loaded callback
+  const handlePOIsLoaded = useCallback((pois: MapPOI[], loading: boolean) => {
+    setDiscoveredPOIs(pois);
+    setIsLoadingPOIs(loading);
+  }, []);
+
   // Handle map click: initiate pending point with preview & confirmation popup
   const handleMapClick = useCallback(async (coords: { lat: number; lng: number }) => {
     setPendingPoint({
@@ -258,6 +379,7 @@ export const Map: React.FC<MapProps> = ({
       lng: coords.lng,
       title: 'Località selezionata...',
       category: 'standard',
+      stopDurationMin: 30,
       isLoading: true,
     });
 
@@ -295,6 +417,7 @@ export const Map: React.FC<MapProps> = ({
       title: pendingPoint.title,
       address: pendingPoint.address,
       category: pendingPoint.category,
+      stopDurationMin: pendingPoint.stopDurationMin,
     });
     setPendingPoint(null);
   };
@@ -306,11 +429,69 @@ export const Map: React.FC<MapProps> = ({
     setPendingPoint(null);
   };
 
+  // Quick add discovered POI to trip
+  const handleAddDiscoveredPOI = (poi: MapPOI, e: React.MouseEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
+    const defaultDur = poi.category === 'stay' ? 480 : poi.category === 'food' ? 45 : poi.category === 'poi' ? 60 : 15;
+    onAddWaypoint({
+      lat: poi.lat,
+      lng: poi.lng,
+      title: poi.name,
+      address: poi.categoryLabel,
+      category: poi.category,
+      stopDurationMin: defaultDur,
+    });
+  };
+
   return (
     <div className="relative w-full h-full bg-slate-950 overflow-hidden select-none">
       {/* Floating Top Search Bar */}
       <div className="absolute top-4 left-4 z-[400] max-w-sm sm:max-w-md w-full">
         <SearchBar onSelectPlace={onSelectSearchResult} />
+      </div>
+
+      {/* Floating Interactive POI Indicator & Toggle Controls */}
+      <div className="absolute top-4 right-4 z-[400] flex items-center gap-2">
+        <button
+          onClick={() => setShowPOILayer((prev) => !prev)}
+          className="bg-slate-900/90 hover:bg-slate-800 border border-slate-700/80 px-3 py-2 rounded-xl shadow-xl flex items-center gap-2 text-xs text-slate-200 transition-colors cursor-pointer"
+          title="Attiva/disattiva punti di interesse interattivi sulla mappa"
+        >
+          <Layers className="w-3.5 h-3.5 text-indigo-400" />
+          <span className="font-medium hidden sm:inline">POI Mappa:</span>
+          {showPOILayer ? (
+            <span className="flex items-center gap-1 text-emerald-400 font-semibold">
+              <Eye className="w-3.5 h-3.5" />
+              <span>Attivi</span>
+            </span>
+          ) : (
+            <span className="flex items-center gap-1 text-slate-400 font-medium">
+              <EyeOff className="w-3.5 h-3.5" />
+              <span>Nascosti</span>
+            </span>
+          )}
+        </button>
+
+        {showPOILayer && (
+          <div className="bg-slate-900/90 border border-slate-800 px-3 py-2 rounded-xl shadow-xl flex items-center gap-2 text-xs text-slate-300">
+            {isLoadingPOIs ? (
+              <>
+                <Loader2 className="w-3.5 h-3.5 animate-spin text-indigo-400" />
+                <span className="hidden sm:inline">Caricamento POI...</span>
+              </>
+            ) : currentZoom >= 13 ? (
+              <>
+                <span className="inline-block w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                <span className="font-semibold text-emerald-300">{discoveredPOIs.length} POI Cliccabili</span>
+              </>
+            ) : (
+              <span className="text-[11px] text-slate-400 hidden sm:inline">
+                🔍 Zoomma per scoprire POI (Z: {currentZoom}/13)
+              </span>
+            )}
+          </div>
+        )}
       </div>
 
       <MapContainer
@@ -331,6 +512,13 @@ export const Map: React.FC<MapProps> = ({
 
         {/* Map Click Handler */}
         <MapEvents onMapClick={handleMapClick} />
+
+        {/* Dynamic POI Discovery in viewport when zoom >= 13 */}
+        <MapPOIDiscoveryController
+          onPOIsLoaded={handlePOIsLoaded}
+          onZoomChange={setCurrentZoom}
+          showPOIs={showPOILayer}
+        />
 
         {/* Camera auto fit controller */}
         <MapBoundsController
@@ -366,6 +554,53 @@ export const Map: React.FC<MapProps> = ({
           </>
         )}
 
+        {/* Discovered Clickable OSM POI Markers (Zoom >= 13) */}
+        {showPOILayer &&
+          currentZoom >= 13 &&
+          discoveredPOIs.map((poi) => (
+            <Marker
+              key={poi.id}
+              position={[poi.lat, poi.lng]}
+              icon={createDiscoveredPOIIcon(poi)}
+            >
+              <Popup className="custom-popup" closeButton={false}>
+                <div
+                  className="p-3.5 min-w-[230px] text-slate-100 space-y-2.5"
+                  onClick={(e) => e.stopPropagation()}
+                  onMouseDown={(e) => e.stopPropagation()}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-400 flex items-center gap-1">
+                      <Sparkles className="w-3 h-3" />
+                      <span>{poi.categoryLabel}</span>
+                    </span>
+                    <CategoryBadge category={poi.category} />
+                  </div>
+
+                  <div>
+                    <h4 className="font-bold text-sm text-white line-clamp-2">
+                      {poi.name}
+                    </h4>
+                    <div className="text-[11px] text-slate-400 mt-1 font-mono flex items-center gap-1">
+                      <Navigation className="w-3 h-3 text-slate-500" />
+                      <span>{poi.lat.toFixed(4)}°, {poi.lng.toFixed(4)}°</span>
+                    </div>
+                  </div>
+
+                  <div className="pt-2 border-t border-slate-800">
+                    <button
+                      onClick={(e) => handleAddDiscoveredPOI(poi, e)}
+                      className="w-full py-1.5 px-3 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs rounded-lg shadow-md flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>Aggiungi all'Itinerario</span>
+                    </button>
+                  </div>
+                </div>
+              </Popup>
+            </Marker>
+          ))}
+
         {/* Pending Point Preview Marker with Confirmation Popup */}
         {pendingPoint && (
           <Marker
@@ -378,7 +613,7 @@ export const Map: React.FC<MapProps> = ({
               autoPan={true}
             >
               <div
-                className="p-3.5 min-w-[240px] text-slate-100 space-y-2.5"
+                className="p-3.5 min-w-[260px] text-slate-100 space-y-2.5"
                 onClick={(e) => e.stopPropagation()}
                 onMouseDown={(e) => e.stopPropagation()}
                 onDoubleClick={(e) => e.stopPropagation()}
@@ -429,11 +664,11 @@ export const Map: React.FC<MapProps> = ({
                   <span className="text-[10px] uppercase font-semibold text-slate-400 block">
                     Seleziona Tipologia:
                   </span>
-                  <div className="grid grid-cols-4 gap-1">
+                  <div className="grid grid-cols-5 gap-1">
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
-                        setPendingPoint((p) => (p ? { ...p, category: 'standard' } : null));
+                        setPendingPoint((p) => (p ? { ...p, category: 'standard', stopDurationMin: 15 } : null));
                       }}
                       onMouseDown={(e) => e.stopPropagation()}
                       className={`text-[10px] py-1 px-1 rounded text-center transition-colors ${
@@ -447,7 +682,21 @@ export const Map: React.FC<MapProps> = ({
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
-                        setPendingPoint((p) => (p ? { ...p, category: 'poi' } : null));
+                        setPendingPoint((p) => (p ? { ...p, category: 'food', stopDurationMin: 45 } : null));
+                      }}
+                      onMouseDown={(e) => e.stopPropagation()}
+                      className={`text-[10px] py-1 px-1 rounded text-center transition-colors ${
+                        pendingPoint.category === 'food'
+                          ? 'bg-orange-500/30 text-orange-300 border border-orange-500/50 font-bold'
+                          : 'bg-slate-800 text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      🍽️ Cibo
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setPendingPoint((p) => (p ? { ...p, category: 'poi', stopDurationMin: 60 } : null));
                       }}
                       onMouseDown={(e) => e.stopPropagation()}
                       className={`text-[10px] py-1 px-1 rounded text-center transition-colors ${
@@ -461,7 +710,7 @@ export const Map: React.FC<MapProps> = ({
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
-                        setPendingPoint((p) => (p ? { ...p, category: 'parking' } : null));
+                        setPendingPoint((p) => (p ? { ...p, category: 'parking', stopDurationMin: 15 } : null));
                       }}
                       onMouseDown={(e) => e.stopPropagation()}
                       className={`text-[10px] py-1 px-1 rounded text-center transition-colors ${
@@ -475,7 +724,7 @@ export const Map: React.FC<MapProps> = ({
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
-                        setPendingPoint((p) => (p ? { ...p, category: 'stay' } : null));
+                        setPendingPoint((p) => (p ? { ...p, category: 'stay', stopDurationMin: 480 } : null));
                       }}
                       onMouseDown={(e) => e.stopPropagation()}
                       className={`text-[10px] py-1 px-1 rounded text-center transition-colors ${
@@ -489,12 +738,39 @@ export const Map: React.FC<MapProps> = ({
                   </div>
                 </div>
 
+                {/* Duration Picker for Pending Point */}
+                <div className="pt-1.5 border-t border-slate-800 flex items-center justify-between text-xs">
+                  <span className="text-slate-400 text-[11px] flex items-center gap-1">
+                    <Clock className="w-3 h-3 text-orange-400" />
+                    <span>Durata Sosta:</span>
+                  </span>
+                  <div className="flex items-center gap-1">
+                    {[15, 30, 45, 60, 120].map((mins) => (
+                      <button
+                        key={mins}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setPendingPoint((p) => (p ? { ...p, stopDurationMin: mins } : null));
+                        }}
+                        onMouseDown={(e) => e.stopPropagation()}
+                        className={`text-[10px] px-1.5 py-0.5 rounded transition-all ${
+                          pendingPoint.stopDurationMin === mins
+                            ? 'bg-orange-500 text-white font-bold'
+                            : 'bg-slate-800 text-slate-400 hover:text-white'
+                        }`}
+                      >
+                        {mins >= 60 ? `${mins / 60}h` : `${mins}m`}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
                 {/* Confirmation Actions */}
                 <div className="pt-2 border-t border-slate-800 flex items-center gap-2">
                   <button
                     onClick={handleConfirmPendingPoint}
                     onMouseDown={(e) => e.stopPropagation()}
-                    className="flex-1 py-1.5 px-3 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs rounded-lg shadow-md flex items-center justify-center gap-1.5 transition-colors"
+                    className="flex-1 py-1.5 px-3 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs rounded-lg shadow-md flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
                   >
                     <Check className="w-3.5 h-3.5" />
                     <span>Aggiungi Tappa</span>
@@ -503,7 +779,7 @@ export const Map: React.FC<MapProps> = ({
                   <button
                     onClick={handleCancelPendingPoint}
                     onMouseDown={(e) => e.stopPropagation()}
-                    className="py-1.5 px-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs rounded-lg transition-colors"
+                    className="py-1.5 px-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs rounded-lg transition-colors cursor-pointer"
                   >
                     Annulla
                   </button>
@@ -516,6 +792,7 @@ export const Map: React.FC<MapProps> = ({
         {/* Existing Waypoint Markers */}
         {waypoints.map((waypoint, index) => {
           const isSelected = waypoint.id === selectedWaypointId;
+          const currentDuration = waypoint.stopDurationMin || 0;
 
           return (
             <Marker
@@ -525,7 +802,7 @@ export const Map: React.FC<MapProps> = ({
             >
               <Popup className="custom-popup" closeButton={false}>
                 <div
-                  className="p-3.5 min-w-[220px] text-slate-100"
+                  className="p-3.5 min-w-[240px] text-slate-100"
                   onClick={(e) => e.stopPropagation()}
                   onMouseDown={(e) => e.stopPropagation()}
                   onDoubleClick={(e) => e.stopPropagation()}
@@ -553,19 +830,52 @@ export const Map: React.FC<MapProps> = ({
                     </span>
                   </div>
 
+                  {/* Stop Duration Editor in Popup */}
+                  {onChangeStopDuration && index > 0 && (
+                    <div className="mt-2.5 pt-2 border-t border-slate-800 flex items-center justify-between text-xs">
+                      <span className="text-[11px] text-slate-400 flex items-center gap-1">
+                        <Clock className="w-3 h-3 text-orange-400" />
+                        <span>Sosta:</span>
+                      </span>
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onChangeStopDuration(waypoint.id, Math.max(0, currentDuration - 15));
+                          }}
+                          className="p-0.5 rounded bg-slate-800 text-slate-300 hover:text-white"
+                        >
+                          <Minus className="w-3 h-3" />
+                        </button>
+                        <span className="font-mono font-bold text-orange-300 text-xs px-1">
+                          {currentDuration}m
+                        </span>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onChangeStopDuration(waypoint.id, currentDuration + 15);
+                          }}
+                          className="p-0.5 rounded bg-slate-800 text-slate-300 hover:text-white"
+                        >
+                          <Plus className="w-3 h-3" />
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
                   {/* Quick Category Selector */}
-                  <div className="mt-3 pt-2.5 border-t border-slate-800 space-y-1.5">
+                  <div className="mt-2.5 pt-2 border-t border-slate-800 space-y-1.5">
                     <span className="text-[10px] uppercase font-semibold text-slate-400 block">
                       Tipologia Segnalino:
                     </span>
-                    <div className="grid grid-cols-4 gap-1">
+                    <div className="grid grid-cols-5 gap-1">
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
                           onChangeCategory(waypoint.id, 'standard');
                         }}
                         onMouseDown={(e) => e.stopPropagation()}
-                        className={`text-[10px] py-1 px-1.5 rounded text-center transition-colors ${
+                        className={`text-[10px] py-1 px-1 rounded text-center transition-colors ${
                           waypoint.category === 'standard'
                             ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-bold'
                             : 'bg-slate-800 text-slate-400 hover:text-white'
@@ -577,10 +887,25 @@ export const Map: React.FC<MapProps> = ({
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
+                          onChangeCategory(waypoint.id, 'food');
+                        }}
+                        onMouseDown={(e) => e.stopPropagation()}
+                        className={`text-[10px] py-1 px-1 rounded text-center transition-colors ${
+                          waypoint.category === 'food'
+                            ? 'bg-orange-500/20 text-orange-300 border border-orange-500/40 font-bold'
+                            : 'bg-slate-800 text-slate-400 hover:text-white'
+                        }`}
+                        title="Ristoro / Cibo"
+                      >
+                        🍽️ Cibo
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
                           onChangeCategory(waypoint.id, 'poi');
                         }}
                         onMouseDown={(e) => e.stopPropagation()}
-                        className={`text-[10px] py-1 px-1.5 rounded text-center transition-colors ${
+                        className={`text-[10px] py-1 px-1 rounded text-center transition-colors ${
                           waypoint.category === 'poi'
                             ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 font-bold'
                             : 'bg-slate-800 text-slate-400 hover:text-white'
@@ -595,7 +920,7 @@ export const Map: React.FC<MapProps> = ({
                           onChangeCategory(waypoint.id, 'parking');
                         }}
                         onMouseDown={(e) => e.stopPropagation()}
-                        className={`text-[10px] py-1 px-1.5 rounded text-center transition-colors ${
+                        className={`text-[10px] py-1 px-1 rounded text-center transition-colors ${
                           waypoint.category === 'parking'
                             ? 'bg-blue-500/20 text-blue-300 border border-blue-500/40 font-bold'
                             : 'bg-slate-800 text-slate-400 hover:text-white'
@@ -610,7 +935,7 @@ export const Map: React.FC<MapProps> = ({
                           onChangeCategory(waypoint.id, 'stay');
                         }}
                         onMouseDown={(e) => e.stopPropagation()}
-                        className={`text-[10px] py-1 px-1.5 rounded text-center transition-colors ${
+                        className={`text-[10px] py-1 px-1 rounded text-center transition-colors ${
                           waypoint.category === 'stay'
                             ? 'bg-purple-500/20 text-purple-300 border border-purple-500/40 font-bold'
                             : 'bg-slate-800 text-slate-400 hover:text-white'
@@ -623,19 +948,14 @@ export const Map: React.FC<MapProps> = ({
                   </div>
 
                   {/* Bottom Actions */}
-                  <div className="mt-3 pt-2 border-t border-slate-800 flex items-center justify-between">
-                    <span className="text-[11px] text-slate-400 flex items-center gap-1">
-                      <Clock className="w-3 h-3 text-slate-400" />
-                      {waypoint.stopDurationMin || 0}m sosta
-                    </span>
-
+                  <div className="mt-3 pt-2 border-t border-slate-800 flex items-center justify-end">
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
                         onRemoveWaypoint(waypoint.id);
                       }}
                       onMouseDown={(e) => e.stopPropagation()}
-                      className="inline-flex items-center gap-1 text-xs text-rose-400 hover:text-rose-300 bg-rose-500/10 hover:bg-rose-500/20 px-2 py-1 rounded transition-colors"
+                      className="inline-flex items-center gap-1 text-xs text-rose-400 hover:text-rose-300 bg-rose-500/10 hover:bg-rose-500/20 px-2 py-1 rounded transition-colors cursor-pointer"
                       title="Rimuovi tappa"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
@@ -648,14 +968,6 @@ export const Map: React.FC<MapProps> = ({
           );
         })}
       </MapContainer>
-
-      {/* Floating Map Helper Badge */}
-      <div className="absolute top-4 right-4 z-[400] pointer-events-none hidden sm:block">
-        <div className="bg-slate-900/90 border border-slate-800 px-3.5 py-2 rounded-xl shadow-lg flex items-center gap-2.5 text-xs text-slate-300">
-          <span className="inline-block w-2 h-2 rounded-full bg-emerald-400"></span>
-          <span>Clicca sulla mappa per visualizzare l'anteprima e confermare la tappa</span>
-        </div>
-      </div>
     </div>
   );
 };

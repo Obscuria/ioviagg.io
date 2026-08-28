@@ -1,4 +1,4 @@
-export type WaypointCategory = 'standard' | 'poi' | 'parking' | 'stay';
+export type WaypointCategory = 'standard' | 'poi' | 'parking' | 'stay' | 'food';
 
 export interface Waypoint {
   id: string;

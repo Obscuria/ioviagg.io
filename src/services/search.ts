@@ -10,6 +10,20 @@ function mapOSMToCategory(item: {
   const osmKey = (item.osm_key || item.class || '').toLowerCase();
   const osmValue = (item.osm_value || item.type || '').toLowerCase();
 
+  // Food & Drink / Restaurant / Bar classification
+  if (
+    ['restaurant', 'cafe', 'bar', 'pub', 'fast_food', 'bistro', 'ice_cream', 'food_court', 'biergarten'].includes(
+      osmValue
+    ) ||
+    (osmKey === 'amenity' && ['restaurant', 'cafe', 'bar', 'pub', 'fast_food', 'bistro', 'ice_cream'].includes(osmValue))
+  ) {
+    let label = 'Ristorante / Cibo';
+    if (['cafe', 'bar', 'pub'].includes(osmValue)) label = 'Bar / Caffè';
+    else if (osmValue === 'ice_cream') label = 'Gelateria';
+    else if (osmValue === 'fast_food') label = 'Fast Food';
+    return { category: 'food', categoryLabel: label };
+  }
+
   // Parking classification
   if (
     osmValue === 'parking' ||
@@ -21,10 +35,10 @@ function mapOSMToCategory(item: {
 
   // Overnight stay classification
   if (
-    ['hotel', 'motel', 'hostel', 'guest_house', 'camp_site', 'caravan_site', 'chalet', 'apartment', 'resort'].includes(
+    ['hotel', 'motel', 'hostel', 'guest_house', 'camp_site', 'caravan_site', 'chalet', 'apartment', 'resort', 'alpine_hut'].includes(
       osmValue
     ) ||
-    (osmKey === 'tourism' && ['hotel', 'hostel', 'camp_site', 'motel', 'chalet'].includes(osmValue))
+    (osmKey === 'tourism' && ['hotel', 'hostel', 'camp_site', 'motel', 'chalet', 'alpine_hut'].includes(osmValue))
   ) {
     return { category: 'stay', categoryLabel: 'Pernottamento' };
   }

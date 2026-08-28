@@ -9,15 +9,19 @@ export function App() {
   // Initialize with the Tuscany tour by default for instant delight
   const [waypoints, setWaypoints] = useState<Waypoint[]>(() => {
     const initialPreset = TRIP_PRESETS[0];
-    return initialPreset.waypoints.map((w, idx) => ({
-      id: `initial-${idx}-${Date.now()}`,
-      lat: w.lat,
-      lng: w.lng,
-      title: w.title,
-      address: w.address,
-      category: w.category || (idx === 0 ? 'standard' : idx === 1 ? 'poi' : idx === 2 ? 'parking' : 'stay'),
-      stopDurationMin: 30,
-    }));
+    return initialPreset.waypoints.map((w, idx) => {
+      const cat = w.category || (idx === 0 ? 'standard' : idx === 1 ? 'food' : idx === 2 ? 'poi' : idx === 3 ? 'parking' : 'stay');
+      const defaultDuration = cat === 'stay' ? 480 : cat === 'food' ? 45 : cat === 'poi' ? 60 : 15;
+      return {
+        id: `initial-${idx}-${Date.now()}`,
+        lat: w.lat,
+        lng: w.lng,
+        title: w.title,
+        address: w.address,
+        category: cat,
+        stopDurationMin: defaultDuration,
+      };
+    });
   });
 
   const [routeData, setRouteData] = useState<RouteData | null>(null);
@@ -57,7 +61,7 @@ export function App() {
     calculateRoute(waypoints);
   }, [waypoints, calculateRoute]);
 
-  // Add waypoint from map confirmation or click
+  // Add waypoint from map confirmation, POI click, or search
   const handleAddWaypoint = useCallback(
     async ({
       lat,
@@ -65,16 +69,29 @@ export function App() {
       title,
       address,
       category = 'standard',
+      stopDurationMin,
     }: {
       lat: number;
       lng: number;
       title?: string;
       address?: string;
       category?: WaypointCategory;
+      stopDurationMin?: number;
     }) => {
       const nextIndex = waypoints.length + 1;
       const defaultTitle = `Tappa ${nextIndex}`;
       const newId = `wp-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`;
+
+      const calculatedDuration =
+        stopDurationMin !== undefined
+          ? stopDurationMin
+          : category === 'stay'
+          ? 480
+          : category === 'food'
+          ? 45
+          : category === 'poi'
+          ? 60
+          : 15;
 
       const newWaypoint: Waypoint = {
         id: newId,
@@ -83,7 +100,7 @@ export function App() {
         title: title || defaultTitle,
         address: address || undefined,
         category,
-        stopDurationMin: category === 'stay' ? 480 : category === 'poi' ? 60 : 30,
+        stopDurationMin: calculatedDuration,
       };
 
       setWaypoints((prev) => [...prev, newWaypoint]);
@@ -115,6 +132,15 @@ export function App() {
   // Add waypoint from textual SearchBar (with automatically detected category)
   const handleSelectSearchResult = useCallback((result: SearchResult) => {
     const newId = `search-wp-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`;
+    const defaultDuration =
+      result.category === 'stay'
+        ? 480
+        : result.category === 'food'
+        ? 45
+        : result.category === 'poi'
+        ? 60
+        : 15;
+
     const newWaypoint: Waypoint = {
       id: newId,
       lat: result.lat,
@@ -122,7 +148,7 @@ export function App() {
       title: result.name,
       address: result.displayName,
       category: result.category,
-      stopDurationMin: result.category === 'stay' ? 480 : result.category === 'poi' ? 60 : 30,
+      stopDurationMin: defaultDuration,
     };
 
     setWaypoints((prev) => [...prev, newWaypoint]);
@@ -131,8 +157,34 @@ export function App() {
 
   // Update waypoint category manually (from sidebar or map popup)
   const handleChangeCategory = useCallback((id: string, newCategory: WaypointCategory) => {
+    const defaultDuration =
+      newCategory === 'stay'
+        ? 480
+        : newCategory === 'food'
+        ? 45
+        : newCategory === 'poi'
+        ? 60
+        : 15;
+
     setWaypoints((prev) =>
-      prev.map((w) => (w.id === id ? { ...w, category: newCategory } : w))
+      prev.map((w) =>
+        w.id === id
+          ? {
+              ...w,
+              category: newCategory,
+              stopDurationMin: w.stopDurationMin ? w.stopDurationMin : defaultDuration,
+            }
+          : w
+      )
+    );
+  }, []);
+
+  // Update stop duration for a specific waypoint
+  const handleChangeStopDuration = useCallback((id: string, durationMinutes: number) => {
+    setWaypoints((prev) =>
+      prev.map((w) =>
+        w.id === id ? { ...w, stopDurationMin: Math.max(0, durationMinutes) } : w
+      )
     );
   }, []);
 
@@ -166,15 +218,19 @@ export function App() {
 
   // Load preset itinerary
   const handleLoadPreset = useCallback((preset: TripPreset) => {
-    const loadedWaypoints: Waypoint[] = preset.waypoints.map((w, idx) => ({
-      id: `preset-${idx}-${Date.now()}`,
-      lat: w.lat,
-      lng: w.lng,
-      title: w.title,
-      address: w.address,
-      category: w.category || 'standard',
-      stopDurationMin: 30,
-    }));
+    const loadedWaypoints: Waypoint[] = preset.waypoints.map((w, idx) => {
+      const cat = w.category || 'standard';
+      const defaultDuration = cat === 'stay' ? 480 : cat === 'food' ? 45 : cat === 'poi' ? 60 : 15;
+      return {
+        id: `preset-${idx}-${Date.now()}`,
+        lat: w.lat,
+        lng: w.lng,
+        title: w.title,
+        address: w.address,
+        category: cat,
+        stopDurationMin: defaultDuration,
+      };
+    });
     setWaypoints(loadedWaypoints);
     setSelectedWaypointId(null);
   }, []);
@@ -190,6 +246,7 @@ export function App() {
         onRemoveWaypoint={handleRemoveWaypoint}
         onReorderWaypoint={handleReorderWaypoint}
         onChangeCategory={handleChangeCategory}
+        onChangeStopDuration={handleChangeStopDuration}
         onClearTrip={handleClearTrip}
         onLoadPreset={handleLoadPreset}
         isLoading={isLoading}
@@ -207,6 +264,7 @@ export function App() {
           onRemoveWaypoint={handleRemoveWaypoint}
           onSelectSearchResult={handleSelectSearchResult}
           onChangeCategory={handleChangeCategory}
+          onChangeStopDuration={handleChangeStopDuration}
           selectedWaypointId={selectedWaypointId}
         />
       </main>
