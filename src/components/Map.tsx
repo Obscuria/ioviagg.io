@@ -26,7 +26,7 @@ import {
   Layers,
 } from 'lucide-react';
 
-type MapStyle = 'streets' | 'topo' | 'satellite' | 'osm' | 'dark';
+type MapStyle = 'osm' | 'osm_hot' | 'cyclosm' | 'topo' | 'esri_streets' | 'satellite';
 
 const MAP_STYLES: Record<
   MapStyle,
@@ -38,18 +38,39 @@ const MAP_STYLES: Record<
     maxZoom?: number;
   }
 > = {
-  streets: {
-    name: 'Occidentale (Strade)',
-    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',
+  osm: {
+    name: 'OpenStreetMap (Dettagliata & POI)',
+    url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
     attribution:
-      'Tiles &copy; Esri &mdash; Source: Esri, DeLorme, NAVTEQ, USGS, Intermap, iPC, METI, TomTom',
+      '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
     maxZoom: 19,
   },
-  topo: {
-    name: 'Topografica & Rilievi',
-    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}',
+  osm_hot: {
+    name: 'OSM Turistica (Humanitarian)',
+    url: 'https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png',
     attribution:
-      'Tiles &copy; Esri &mdash; Esri, DeLorme, NAVTEQ, TomTom, Intermap, USGS, FAO, NPS, NRCAN',
+      '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, Tiles style by Humanitarian OpenStreetMap Team',
+    maxZoom: 19,
+  },
+  cyclosm: {
+    name: 'Outdoor & Punti di Interesse',
+    url: 'https://{s}.tile-cyclosm.openstreetmap.fr/cyclosm/{z}/{x}/{y}.png',
+    attribution:
+      '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, &copy; <a href="https://www.cyclosm.org">CyclOSM</a>',
+    maxZoom: 20,
+  },
+  topo: {
+    name: 'Topografica & Rilievi (OpenTopo)',
+    url: 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',
+    attribution:
+      'Kartendaten: &copy; <a href="https://openstreetmap.org/copyright">OpenStreetMap</a>-Mitwirkende | Kartendarstellung: &copy; <a href="http://opentopomap.org">OpenTopoMap</a>',
+    maxZoom: 17,
+  },
+  esri_streets: {
+    name: 'Esri World Street (Strade)',
+    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',
+    attribution:
+      'Tiles &copy; Esri &mdash; Source: Esri, DeLorme, NAVTEQ, USGS, TomTom',
     maxZoom: 19,
   },
   satellite: {
@@ -58,20 +79,6 @@ const MAP_STYLES: Record<
     attribution:
       'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid',
     maxZoom: 19,
-  },
-  osm: {
-    name: 'OpenStreetMap (Locale)',
-    url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-    attribution:
-      '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-    maxZoom: 19,
-  },
-  dark: {
-    name: 'Dark Gray Mode',
-    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}',
-    attribution:
-      'Tiles &copy; Esri &mdash; Esri, DeLorme, NAVTEQ',
-    maxZoom: 16,
   },
 };
 
@@ -343,8 +350,8 @@ export const Map: React.FC<MapProps> = ({
   const defaultCenter: [number, number] = [42.5, 12.5];
   const defaultZoom = 6;
 
-  // Map Tile Style State (Default: Western Esri Streets)
-  const [mapStyle, setMapStyle] = useState<MapStyle>('streets');
+  // Map Tile Style State (Default: OpenStreetMap Detailed with POIs)
+  const [mapStyle, setMapStyle] = useState<MapStyle>('osm');
   const [showLayerMenu, setShowLayerMenu] = useState<boolean>(false);
 
   // Pending point state for click confirmation
