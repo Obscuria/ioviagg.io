@@ -26,7 +26,10 @@ import {
   Layers,
 } from 'lucide-react';
 
-type MapStyle = 'osm' | 'osm_hot' | 'cyclosm' | 'topo' | 'esri_streets' | 'satellite';
+type MapStyle = 'osm' | 'osm_hot' | 'cyclosm' | 'topo' | 'esri_streets' | 'carto_voyager' | 'maptiler_streets' | 'satellite';
+
+const cartoKey = import.meta.env.VITE_CARTO_API_KEY || '';
+const maptilerKey = import.meta.env.VITE_MAPTILER_API_KEY || '';
 
 const MAP_STYLES: Record<
   MapStyle,
@@ -52,6 +55,13 @@ const MAP_STYLES: Record<
       '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, Tiles style by Humanitarian OpenStreetMap Team',
     maxZoom: 19,
   },
+  esri_streets: {
+    name: 'Esri Occidentale (Strade)',
+    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',
+    attribution:
+      'Tiles &copy; Esri &mdash; Source: Esri, DeLorme, NAVTEQ, USGS, TomTom',
+    maxZoom: 19,
+  },
   cyclosm: {
     name: 'Outdoor & Punti di Interesse',
     url: 'https://{s}.tile-cyclosm.openstreetmap.fr/cyclosm/{z}/{x}/{y}.png',
@@ -66,12 +76,24 @@ const MAP_STYLES: Record<
       'Kartendaten: &copy; <a href="https://openstreetmap.org/copyright">OpenStreetMap</a>-Mitwirkende | Kartendarstellung: &copy; <a href="http://opentopomap.org">OpenTopoMap</a>',
     maxZoom: 17,
   },
-  esri_streets: {
-    name: 'Esri World Street (Strade)',
-    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',
+  carto_voyager: {
+    name: 'CARTO Voyager (Occidentale)',
+    url: `https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png${
+      cartoKey ? `?api_key=${cartoKey}` : ''
+    }`,
     attribution:
-      'Tiles &copy; Esri &mdash; Source: Esri, DeLorme, NAVTEQ, USGS, TomTom',
-    maxZoom: 19,
+      '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+    subdomains: 'abcd',
+    maxZoom: 20,
+  },
+  maptiler_streets: {
+    name: 'MapTiler (100% Occidentale & POI)',
+    url: maptilerKey
+      ? `https://api.maptiler.com/maps/streets-v2/{z}/{x}/{y}.png?key=${maptilerKey}`
+      : 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',
+    attribution:
+      '&copy; <a href="https://www.maptiler.com/copyright/">MapTiler</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors</a>',
+    maxZoom: 20,
   },
   satellite: {
     name: 'Satellite (Esri)',
