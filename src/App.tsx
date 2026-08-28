@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import type { Waypoint, RouteData, TripPreset, SearchResult, WaypointCategory } from './types/trip';
 import { fetchOSRMRoute, reverseGeocode } from './services/osrm';
 import { Sidebar } from './components/Sidebar';
@@ -333,6 +333,47 @@ export function App() {
     setFitTrigger((prev) => prev + 1);
   }, []);
 
+  // Determine if trip is already a closed loop (start == end)
+  const isLoopClosed = useMemo(() => {
+    if (waypoints.length < 2) return false;
+    const first = waypoints[0];
+    const last = waypoints[waypoints.length - 1];
+    return (
+      Math.abs(first.lat - last.lat) < 0.0001 &&
+      Math.abs(first.lng - last.lng) < 0.0001
+    );
+  }, [waypoints]);
+
+  // Toggle close/open loop itinerary (returns to starting point)
+  const handleToggleCloseLoop = useCallback(() => {
+    if (waypoints.length < 2) return;
+    const first = waypoints[0];
+    const last = waypoints[waypoints.length - 1];
+    const isClosed =
+      Math.abs(first.lat - last.lat) < 0.0001 &&
+      Math.abs(first.lng - last.lng) < 0.0001;
+
+    if (isClosed) {
+      // Remove return waypoint
+      setWaypoints((prev) => prev.slice(0, -1));
+    } else {
+      // Add return waypoint
+      const newId = `loop-return-${Date.now()}`;
+      const returnWaypoint: Waypoint = {
+        id: newId,
+        lat: first.lat,
+        lng: first.lng,
+        title: `Ritorno a ${first.title}`,
+        address: first.address,
+        category: 'standard',
+        stopDurationMin: 0,
+        day: totalDays,
+      };
+      setWaypoints((prev) => [...prev, returnWaypoint]);
+      setSelectedWaypointId(newId);
+    }
+  }, [waypoints, totalDays]);
+
   return (
     <div className="flex flex-col md:flex-row w-screen h-screen overflow-hidden bg-slate-950">
       {/* Sidebar on Left */}
@@ -356,6 +397,8 @@ export function App() {
         onChangeStopDuration={handleChangeStopDuration}
         onClearTrip={handleClearTrip}
         onLoadPreset={handleLoadPreset}
+        isLoopClosed={isLoopClosed}
+        onToggleCloseLoop={handleToggleCloseLoop}
         isLoading={isLoading}
         error={error}
         selectedWaypointId={selectedWaypointId}
@@ -374,6 +417,8 @@ export function App() {
           onChangeCategory={handleChangeCategory}
           onChangeStopDuration={handleChangeStopDuration}
           selectedWaypointId={selectedWaypointId}
+          isLoopClosed={isLoopClosed}
+          onToggleCloseLoop={handleToggleCloseLoop}
           fitTrigger={fitTrigger}
           onFitRoute={handleFitRoute}
         />

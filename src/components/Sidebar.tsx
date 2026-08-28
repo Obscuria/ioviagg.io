@@ -32,6 +32,7 @@ import {
   Timer,
   Route,
   Check,
+  Repeat,
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -54,6 +55,8 @@ interface SidebarProps {
   onChangeStopDuration: (id: string, durationMinutes: number) => void;
   onClearTrip: () => void;
   onLoadPreset: (preset: TripPreset) => void;
+  isLoopClosed?: boolean;
+  onToggleCloseLoop?: () => void;
   isLoading: boolean;
   error: string | null;
   selectedWaypointId: string | null;
@@ -82,6 +85,17 @@ function formatTimeOfDay(totalMinutes: number): string {
 interface WaypointSchedule {
   arrivalTime?: string;
   departureTime?: string;
+  isStay?: boolean;
+}
+
+// Calculate daytime intermediate stop minutes (excludes overnight stay points which conclude the day)
+function calculateDaytimeStopMinutes(waypoints: Waypoint[]): number {
+  return waypoints.reduce((acc, w, idx) => {
+    if (idx === 0 || idx === waypoints.length - 1 || w.category === 'stay') {
+      return acc;
+    }
+    return acc + (w.stopDurationMin || 0);
+  }, 0);
 }
 
 function calculateWaypointSchedules(
@@ -99,6 +113,7 @@ function calculateWaypointSchedules(
   for (let i = 0; i < waypoints.length; i++) {
     const wp = waypoints[i];
     const wpDay = wp.day || 1;
+    const isStay = wp.category === 'stay';
 
     // If day changed, reset time to morning departure
     if (wpDay !== lastDay) {
@@ -115,27 +130,36 @@ function calculateWaypointSchedules(
       currentMinutes += legDuration;
       const arrStr = formatTimeOfDay(currentMinutes);
 
-      const stopMin = wp.stopDurationMin || 0;
-      currentMinutes += stopMin;
-      const depStr = i === waypoints.length - 1 ? undefined : formatTimeOfDay(currentMinutes);
+      if (isStay) {
+        // Pernottamento concludes the day! No departure on the same day.
+        schedules.push({
+          arrivalTime: arrStr,
+          departureTime: undefined,
+          isStay: true,
+        });
+      } else {
+        const stopMin = wp.stopDurationMin || 0;
+        currentMinutes += stopMin;
+        const depStr = i === waypoints.length - 1 ? undefined : formatTimeOfDay(currentMinutes);
 
-      schedules.push({
-        arrivalTime: arrStr,
-        departureTime: depStr,
-      });
+        schedules.push({
+          arrivalTime: arrStr,
+          departureTime: depStr,
+        });
+      }
     }
   }
 
   return schedules;
 }
 
-// Utility: compute overall ETA from departure time + driving duration + stop durations
+// Utility: compute overall ETA from departure time + driving duration + daytime stop durations
 function computeETA(departureTime: string, drivingMinutes: number, waypoints: Waypoint[]): string {
   const [depHours, depMins] = departureTime.split(':').map(Number);
   if (isNaN(depHours) || isNaN(depMins)) return '--:--';
 
-  const totalStopMinutes = waypoints.reduce((acc, w) => acc + (w.stopDurationMin || 0), 0);
-  const totalTripMinutes = drivingMinutes + totalStopMinutes;
+  const daytimeStopMinutes = calculateDaytimeStopMinutes(waypoints);
+  const totalTripMinutes = drivingMinutes + daytimeStopMinutes;
 
   return formatTimeOfDay(depHours * 60 + depMins + totalTripMinutes);
 }
@@ -160,6 +184,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onChangeStopDuration,
   onClearTrip,
   onLoadPreset,
+  isLoopClosed = false,
+  onToggleCloseLoop,
   isLoading,
   error,
   selectedWaypointId,
@@ -182,7 +208,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const [editingWaypointId, setEditingWaypointId] = useState<string | null>(null);
   const [editingTitle, setEditingTitle] = useState<string>('');
 
-  const totalStopMinutes = waypoints.reduce((acc, w) => acc + (w.stopDurationMin || 0), 0);
+  const totalStopMinutes = calculateDaytimeStopMinutes(waypoints);
 
   const eta = hasRoute
     ? computeETA(departureTime, routeData.durationMinutes, waypoints)
@@ -296,6 +322,26 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
         {/* Compact Action Controls */}
         <div className="flex items-center gap-1.5 relative">
+          {/* Close Loop Button */}
+          {waypoints.length >= 2 && onToggleCloseLoop && (
+            <button
+              onClick={onToggleCloseLoop}
+              className={`flex items-center gap-1 text-[11px] font-medium px-2 py-1 rounded-lg border transition-colors cursor-pointer ${
+                isLoopClosed
+                  ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 hover:bg-rose-500/20 hover:text-rose-300 hover:border-rose-500/40'
+                  : 'bg-slate-800/70 text-slate-300 hover:text-white border-slate-700/60 hover:bg-indigo-600/30'
+              }`}
+              title={
+                isLoopClosed
+                  ? 'Itinerario ad anello chiuso (Clicca per rimuovere ritorno)'
+                  : 'Chiudi itinerario tornando alla partenza'
+              }
+            >
+              <Repeat className="w-3 h-3 text-emerald-400" />
+              <span>{isLoopClosed ? 'Anello Chiuso' : 'Chiudi Anello'}</span>
+            </button>
+          )}
+
           {/* Preset Demo Picker Button */}
           <button
             onClick={() => setShowPresetsMenu((prev) => !prev)}
@@ -791,8 +837,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
                           Partenza: {schedule?.departureTime || departureTime}
                         </span>
                       ) : isEnd ? (
-                        <span className="text-rose-400">
+                        <span className="text-rose-400 font-semibold">
                           Arrivo: {schedule?.arrivalTime || '--:--'}
+                        </span>
+                      ) : category === 'stay' ? (
+                        <span className="text-purple-300 font-semibold flex items-center gap-1">
+                          <span>🛏️ Arrivo: {schedule?.arrivalTime || '--:--'} (Pernottamento)</span>
                         </span>
                       ) : (
                         <span className="text-slate-400 truncate">
@@ -857,50 +907,79 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       </div>
                     </div>
 
-                    {/* Stop Duration Controls (Only for non-start points) */}
-                    {!isStart && (
-                      <div className="space-y-1">
-                        <div className="flex items-center justify-between text-[10px]">
-                          <span className="text-slate-400 flex items-center gap-1">
-                            <Clock className="w-2.5 h-2.5 text-orange-400" />
-                            <span>Durata Sosta:</span>
-                          </span>
-                          <div className="flex items-center gap-1">
-                            <button
-                              onClick={() => onChangeStopDuration(waypoint.id, Math.max(0, currentDuration - 15))}
-                              className="p-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 cursor-pointer"
-                            >
-                              <Minus className="w-2.5 h-2.5" />
-                            </button>
-                            <span className="font-mono font-bold text-orange-300 px-1 text-[11px]">
-                              {formatDuration(currentDuration)}
-                            </span>
-                            <button
-                              onClick={() => onChangeStopDuration(waypoint.id, currentDuration + 15)}
-                              className="p-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 cursor-pointer"
-                            >
-                              <Plus className="w-2.5 h-2.5" />
-                            </button>
-                          </div>
-                        </div>
+                    {/* Loop Closure Quick Button on Start Point */}
+                    {isStart && waypoints.length >= 2 && onToggleCloseLoop && (
+                      <div className="pt-1">
+                        <button
+                          onClick={onToggleCloseLoop}
+                          className={`w-full py-1.5 px-2.5 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-sm ${
+                            isLoopClosed
+                              ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 hover:bg-rose-500/20 hover:text-rose-300'
+                              : 'bg-indigo-600 hover:bg-indigo-500 text-white'
+                          }`}
+                        >
+                          <Repeat className="w-3.5 h-3.5" />
+                          <span>{isLoopClosed ? 'Apri Anello (Rimuovi Ritorno)' : 'Chiudi Anello (Torna a questa partenza)'}</span>
+                        </button>
+                      </div>
+                    )}
 
-                        {/* Quick Duration Chips */}
-                        <div className="grid grid-cols-6 gap-1 text-[9px]">
-                          {[15, 30, 45, 60, 120, 480].map((mins) => (
-                            <button
-                              key={mins}
-                              onClick={() => onChangeStopDuration(waypoint.id, mins)}
-                              className={`py-0.5 rounded text-center transition-all cursor-pointer ${
-                                currentDuration === mins
-                                  ? 'bg-orange-500 text-white font-bold'
-                                  : 'bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-white'
-                              }`}
-                            >
-                              {mins >= 60 ? `${mins / 60}h` : `${mins}m`}
-                            </button>
-                          ))}
+                    {/* Pernottamento / Stay Information Banner */}
+                    {category === 'stay' ? (
+                      <div className="p-2 rounded-lg bg-purple-950/40 border border-purple-800/50 text-[11px] text-purple-200 flex items-center gap-2">
+                        <div className="w-6 h-6 rounded-full bg-purple-600/30 flex items-center justify-center text-purple-300 shrink-0">
+                          🛏️
+                        </div>
+                        <div>
+                          <p className="font-semibold text-white">Pernottamento (Fine Giornata)</p>
+                          <p className="text-[10px] text-purple-300/80">Conclude la giornata. Ripartenza alle {departureTime} del giorno dopo.</p>
                         </div>
                       </div>
+                    ) : (
+                      !isStart && (
+                        <div className="space-y-1">
+                          <div className="flex items-center justify-between text-[10px]">
+                            <span className="text-slate-400 flex items-center gap-1">
+                              <Clock className="w-2.5 h-2.5 text-orange-400" />
+                              <span>Durata Sosta:</span>
+                            </span>
+                            <div className="flex items-center gap-1">
+                              <button
+                                onClick={() => onChangeStopDuration(waypoint.id, Math.max(0, currentDuration - 15))}
+                                className="p-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 cursor-pointer"
+                              >
+                                <Minus className="w-2.5 h-2.5" />
+                              </button>
+                              <span className="font-mono font-bold text-orange-300 px-1 text-[11px]">
+                                {formatDuration(currentDuration)}
+                              </span>
+                              <button
+                                onClick={() => onChangeStopDuration(waypoint.id, currentDuration + 15)}
+                                className="p-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 cursor-pointer"
+                              >
+                                <Plus className="w-2.5 h-2.5" />
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Quick Duration Chips */}
+                          <div className="grid grid-cols-5 gap-1 text-[9px]">
+                            {[15, 30, 45, 60, 120].map((mins) => (
+                              <button
+                                key={mins}
+                                onClick={() => onChangeStopDuration(waypoint.id, mins)}
+                                className={`py-0.5 rounded text-center transition-all cursor-pointer ${
+                                  currentDuration === mins
+                                    ? 'bg-orange-500 text-white font-bold'
+                                    : 'bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-white'
+                                }`}
+                              >
+                                {mins >= 60 ? `${mins / 60}h` : `${mins}m`}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )
                     )}
 
                     {/* Category Selector Pills */}

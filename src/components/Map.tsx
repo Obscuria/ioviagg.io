@@ -24,6 +24,7 @@ import {
   Minus,
   Maximize2,
   Layers,
+  Repeat,
 } from 'lucide-react';
 
 type MapStyle = 'maptiler_streets' | 'maptiler_outdoor' | 'maptiler_voyager' | 'osm' | 'osm_hot' | 'cyclosm' | 'esri_streets' | 'satellite';
@@ -125,6 +126,8 @@ interface MapProps {
   onChangeCategory: (id: string, category: WaypointCategory) => void;
   onChangeStopDuration?: (id: string, durationMinutes: number) => void;
   selectedWaypointId?: string | null;
+  isLoopClosed?: boolean;
+  onToggleCloseLoop?: () => void;
   fitTrigger?: number;
   onFitRoute?: () => void;
 }
@@ -360,6 +363,8 @@ export const Map: React.FC<MapProps> = ({
   onChangeCategory,
   onChangeStopDuration,
   selectedWaypointId,
+  isLoopClosed = false,
+  onToggleCloseLoop,
   fitTrigger,
   onFitRoute,
 }) => {
@@ -797,37 +802,64 @@ export const Map: React.FC<MapProps> = ({
                     </span>
                   </div>
 
-                  {/* Stop Duration Editor in Popup */}
-                  {onChangeStopDuration && index > 0 && (
-                    <div className="mt-2.5 pt-2 border-t border-slate-800 flex items-center justify-between text-xs">
-                      <span className="text-[11px] text-slate-400 flex items-center gap-1">
-                        <Clock className="w-3 h-3 text-orange-400" />
-                        <span>Sosta:</span>
-                      </span>
-                      <div className="flex items-center gap-1">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onChangeStopDuration(waypoint.id, Math.max(0, currentDuration - 15));
-                          }}
-                          className="p-0.5 rounded bg-slate-800 text-slate-300 hover:text-white"
-                        >
-                          <Minus className="w-3 h-3" />
-                        </button>
-                        <span className="font-mono font-bold text-orange-300 text-xs px-1">
-                          {currentDuration}m
-                        </span>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onChangeStopDuration(waypoint.id, currentDuration + 15);
-                          }}
-                          className="p-0.5 rounded bg-slate-800 text-slate-300 hover:text-white"
-                        >
-                          <Plus className="w-3 h-3" />
-                        </button>
-                      </div>
+                  {/* Loop Closure Quick Button on Start Marker */}
+                  {index === 0 && waypoints.length >= 2 && onToggleCloseLoop && (
+                    <div className="mt-2.5 pt-2 border-t border-slate-800">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onToggleCloseLoop();
+                        }}
+                        className={`w-full py-1.5 px-2.5 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-md ${
+                          isLoopClosed
+                            ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 hover:bg-rose-500/20 hover:text-rose-300'
+                            : 'bg-indigo-600 hover:bg-indigo-500 text-white'
+                        }`}
+                      >
+                        <Repeat className="w-3.5 h-3.5" />
+                        <span>{isLoopClosed ? 'Apri Anello (Rimuovi Ritorno)' : 'Chiudi Anello (Torna alla Partenza)'}</span>
+                      </button>
                     </div>
+                  )}
+
+                  {/* Stop Duration Editor in Popup */}
+                  {waypoint.category === 'stay' ? (
+                    <div className="mt-2.5 pt-2 border-t border-slate-800 flex items-center gap-2 p-1.5 rounded-lg bg-purple-950/40 border border-purple-800/40 text-[11px] text-purple-200">
+                      <span className="text-sm">🛏️</span>
+                      <span className="font-medium text-[10px]">Pernottamento: conclude la giornata attiva</span>
+                    </div>
+                  ) : (
+                    onChangeStopDuration && index > 0 && (
+                      <div className="mt-2.5 pt-2 border-t border-slate-800 flex items-center justify-between text-xs">
+                        <span className="text-[11px] text-slate-400 flex items-center gap-1">
+                          <Clock className="w-3 h-3 text-orange-400" />
+                          <span>Sosta:</span>
+                        </span>
+                        <div className="flex items-center gap-1">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onChangeStopDuration(waypoint.id, Math.max(0, currentDuration - 15));
+                            }}
+                            className="p-0.5 rounded bg-slate-800 text-slate-300 hover:text-white"
+                          >
+                            <Minus className="w-3 h-3" />
+                          </button>
+                          <span className="font-mono font-bold text-orange-300 text-xs px-1">
+                            {currentDuration}m
+                          </span>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onChangeStopDuration(waypoint.id, currentDuration + 15);
+                            }}
+                            className="p-0.5 rounded bg-slate-800 text-slate-300 hover:text-white"
+                          >
+                            <Plus className="w-3 h-3" />
+                          </button>
+                        </div>
+                      </div>
+                    )
                   )}
 
                   {/* Quick Category Selector */}
