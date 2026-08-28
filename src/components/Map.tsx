@@ -26,10 +26,9 @@ import {
   Layers,
 } from 'lucide-react';
 
-type MapStyle = 'osm' | 'osm_hot' | 'cyclosm' | 'topo' | 'esri_streets' | 'carto_voyager' | 'maptiler_streets' | 'satellite';
+type MapStyle = 'maptiler_streets' | 'maptiler_outdoor' | 'maptiler_voyager' | 'osm' | 'osm_hot' | 'cyclosm' | 'esri_streets' | 'satellite';
 
-const cartoKey = import.meta.env.VITE_CARTO_API_KEY || '';
-const maptilerKey = import.meta.env.VITE_MAPTILER_API_KEY || '';
+const maptilerKey = import.meta.env.VITE_MAPTILER_API_KEY || 'BI0PUr7lAv88pkiFEFeu';
 
 const MAP_STYLES: Record<
   MapStyle,
@@ -41,6 +40,27 @@ const MAP_STYLES: Record<
     maxZoom?: number;
   }
 > = {
+  maptiler_streets: {
+    name: 'MapTiler (100% Occidentale & POI)',
+    url: `https://api.maptiler.com/maps/streets-v2/256/{z}/{x}/{y}.png?key=${maptilerKey}`,
+    attribution:
+      '&copy; <a href="https://www.maptiler.com/copyright/">MapTiler</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors</a>',
+    maxZoom: 20,
+  },
+  maptiler_outdoor: {
+    name: 'MapTiler Outdoor & Parchi (Occidentale)',
+    url: `https://api.maptiler.com/maps/outdoor-v2/256/{z}/{x}/{y}.png?key=${maptilerKey}`,
+    attribution:
+      '&copy; <a href="https://www.maptiler.com/copyright/">MapTiler</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors</a>',
+    maxZoom: 20,
+  },
+  maptiler_voyager: {
+    name: 'MapTiler Voyager (Furkot Style)',
+    url: `https://api.maptiler.com/maps/voyager/256/{z}/{x}/{y}.png?key=${maptilerKey}`,
+    attribution:
+      '&copy; <a href="https://www.maptiler.com/copyright/">MapTiler</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors</a>',
+    maxZoom: 20,
+  },
   osm: {
     name: 'OpenStreetMap (Dettagliata & POI)',
     url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
@@ -63,36 +83,10 @@ const MAP_STYLES: Record<
     maxZoom: 19,
   },
   cyclosm: {
-    name: 'Outdoor & Punti di Interesse',
+    name: 'Outdoor & Punti di Interesse (CyclOSM)',
     url: 'https://{s}.tile-cyclosm.openstreetmap.fr/cyclosm/{z}/{x}/{y}.png',
     attribution:
       '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, &copy; <a href="https://www.cyclosm.org">CyclOSM</a>',
-    maxZoom: 20,
-  },
-  topo: {
-    name: 'Topografica & Rilievi (OpenTopo)',
-    url: 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',
-    attribution:
-      'Kartendaten: &copy; <a href="https://openstreetmap.org/copyright">OpenStreetMap</a>-Mitwirkende | Kartendarstellung: &copy; <a href="http://opentopomap.org">OpenTopoMap</a>',
-    maxZoom: 17,
-  },
-  carto_voyager: {
-    name: 'CARTO Voyager (Occidentale)',
-    url: `https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png${
-      cartoKey ? `?api_key=${cartoKey}` : ''
-    }`,
-    attribution:
-      '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
-    subdomains: 'abcd',
-    maxZoom: 20,
-  },
-  maptiler_streets: {
-    name: 'MapTiler (100% Occidentale & POI)',
-    url: maptilerKey
-      ? `https://api.maptiler.com/maps/streets-v2/{z}/{x}/{y}.png?key=${maptilerKey}`
-      : 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',
-    attribution:
-      '&copy; <a href="https://www.maptiler.com/copyright/">MapTiler</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors</a>',
     maxZoom: 20,
   },
   satellite: {
@@ -372,8 +366,8 @@ export const Map: React.FC<MapProps> = ({
   const defaultCenter: [number, number] = [42.5, 12.5];
   const defaultZoom = 6;
 
-  // Map Tile Style State (Default: OpenStreetMap Detailed with POIs)
-  const [mapStyle, setMapStyle] = useState<MapStyle>('osm');
+  // Map Tile Style State (Default: MapTiler 100% Western/Latin with all POIs)
+  const [mapStyle, setMapStyle] = useState<MapStyle>('maptiler_streets');
   const [showLayerMenu, setShowLayerMenu] = useState<boolean>(false);
 
   // Pending point state for click confirmation
