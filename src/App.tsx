@@ -3,23 +3,78 @@ import type { Waypoint, RouteData, SearchResult, WaypointCategory } from './type
 import { fetchOSRMRoute, reverseGeocode } from './services/osrm';
 import { Sidebar } from './components/Sidebar';
 import { Map } from './components/Map';
+import { Compass, Route } from 'lucide-react';
+
+const STORAGE_KEY = 'ioviaggio_trip_v1';
+
+interface SavedTripData {
+  waypoints: Waypoint[];
+  totalDays: number;
+  dayDepartureTimes: Record<number, string>;
+  activeDayTab: number | null;
+}
+
+function getInitialTripData(): SavedTripData {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed && Array.isArray(parsed.waypoints)) {
+        return {
+          waypoints: parsed.waypoints,
+          totalDays: typeof parsed.totalDays === 'number' && parsed.totalDays >= 1 ? parsed.totalDays : 1,
+          dayDepartureTimes: parsed.dayDepartureTimes || { 1: '09:00' },
+          activeDayTab: typeof parsed.activeDayTab === 'number' || parsed.activeDayTab === null ? parsed.activeDayTab : null,
+        };
+      }
+    }
+  } catch {
+    // localStorage might be unavailable or disabled
+  }
+  return {
+    waypoints: [],
+    totalDays: 1,
+    dayDepartureTimes: { 1: '09:00' },
+    activeDayTab: null,
+  };
+}
 
 export function App() {
-  // Number of trip days & active day tab filter (starts clean and blank)
-  const [totalDays, setTotalDays] = useState<number>(1);
-  const [activeDayTab, setActiveDayTab] = useState<number | null>(null); // null = "Tutti i Giorni"
+  const initialData = useMemo(() => getInitialTripData(), []);
 
-  // Empty initial waypoints for a clean custom trip
-  const [waypoints, setWaypoints] = useState<Waypoint[]>([]);
+  // Number of trip days & active day tab filter (loaded from localStorage if available)
+  const [totalDays, setTotalDays] = useState<number>(initialData.totalDays);
+  const [activeDayTab, setActiveDayTab] = useState<number | null>(initialData.activeDayTab);
+
+  // Persistent waypoints
+  const [waypoints, setWaypoints] = useState<Waypoint[]>(initialData.waypoints);
 
   const [routeData, setRouteData] = useState<RouteData | null>(null);
-  const [dayDepartureTimes, setDayDepartureTimes] = useState<Record<number, string>>({
-    1: '09:00',
-  });
+  const [dayDepartureTimes, setDayDepartureTimes] = useState<Record<number, string>>(
+    initialData.dayDepartureTimes
+  );
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedWaypointId, setSelectedWaypointId] = useState<string | null>(null);
   const [fitTrigger, setFitTrigger] = useState<number>(0);
+
+  // Mobile view mode toggle for small screens ('map' | 'sidebar')
+  const [mobileView, setMobileView] = useState<'map' | 'sidebar'>('map');
+
+  // Automatically persist trip data to localStorage on every change
+  useEffect(() => {
+    try {
+      const dataToSave: SavedTripData = {
+        waypoints,
+        totalDays,
+        dayDepartureTimes,
+        activeDayTab,
+      };
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(dataToSave));
+    } catch (e) {
+      console.warn('Unable to persist trip data to localStorage:', e);
+    }
+  }, [waypoints, totalDays, dayDepartureTimes, activeDayTab]);
 
   const handleSetDayDepartureTime = useCallback((day: number, time: string) => {
     setDayDepartureTimes((prev) => ({
@@ -106,11 +161,10 @@ export function App() {
       return nextTimes;
     });
 
-    setTotalDays((prev) => Math.max(1, prev - 1));
-    setActiveDayTab((prev) => {
-      if (prev === dayToRemove) return null;
-      if (prev && prev > dayToRemove) return prev - 1;
-      return prev;
+    setTotalDays((prev) => {
+      const nextCount = Math.max(1, prev - 1);
+      setActiveDayTab((cur) => (cur && cur >= nextCount ? null : cur));
+      return nextCount;
     });
   }, [totalDays]);
 
@@ -137,10 +191,10 @@ export function App() {
     });
 
     // Follow the swapped day to its new index so the user remains on the day they just moved
-    setActiveDayTab((prev) => {
-      if (prev === dayA) return dayB;
-      if (prev === dayB) return dayA;
-      return dayB;
+    setActiveDayTab((currentTab) => {
+      if (currentTab === dayA) return dayB;
+      if (currentTab === dayB) return dayA;
+      return currentTab;
     });
   }, []);
 
@@ -281,9 +335,7 @@ export function App() {
   // Update stop duration for a specific waypoint
   const handleChangeStopDuration = useCallback((id: string, durationMinutes: number) => {
     setWaypoints((prev) =>
-      prev.map((w) =>
-        w.id === id ? { ...w, stopDurationMin: Math.max(0, durationMinutes) } : w
-      )
+      prev.map((w) => (w.id === id ? { ...w, stopDurationMin: Math.max(0, durationMinutes) } : w))
     );
   }, []);
 
@@ -323,6 +375,11 @@ export function App() {
     setTotalDays(1);
     setDayDepartureTimes({ 1: '09:00' });
     setActiveDayTab(null);
+    try {
+      localStorage.removeItem(STORAGE_KEY);
+    } catch (e) {
+      console.warn('Unable to clear localStorage:', e);
+    }
   }, []);
 
   // Determine if trip is already a closed loop (start == end)
@@ -366,38 +423,56 @@ export function App() {
     }
   }, [waypoints, totalDays]);
 
-  return (
-    <div className="flex flex-col md:flex-row w-screen h-screen overflow-hidden bg-slate-950">
-      {/* Sidebar on Left */}
-      <Sidebar
-        waypoints={waypoints}
-        routeData={routeData}
-        dayDepartureTimes={dayDepartureTimes}
-        onSetDayDepartureTime={handleSetDayDepartureTime}
-        totalDays={totalDays}
-        activeDayTab={activeDayTab}
-        onActiveDayTabChange={setActiveDayTab}
-        onAddDay={handleAddDay}
-        onSetTotalDays={handleSetTotalDays}
-        onRemoveDay={handleRemoveDayConfirmed}
-        onSwapDays={handleSwapDays}
-        onChangeWaypointDay={handleChangeWaypointDay}
-        onRenameWaypoint={handleRenameWaypoint}
-        onRemoveWaypoint={handleRemoveWaypoint}
-        onReorderWaypoint={handleReorderWaypoint}
-        onChangeCategory={handleChangeCategory}
-        onChangeStopDuration={handleChangeStopDuration}
-        onClearTrip={handleClearTrip}
-        isLoopClosed={isLoopClosed}
-        onToggleCloseLoop={handleToggleCloseLoop}
-        isLoading={isLoading}
-        error={error}
-        selectedWaypointId={selectedWaypointId}
-        onSelectWaypoint={setSelectedWaypointId}
-      />
+  // Handle waypoint selection (if on mobile, switch view to map)
+  const handleSelectWaypoint = useCallback((id: string | null) => {
+    setSelectedWaypointId(id);
+    if (id && typeof window !== 'undefined' && window.innerWidth < 768) {
+      setMobileView('map');
+    }
+  }, []);
 
-      {/* Interactive Map on Right with SearchBar */}
-      <main className="flex-1 h-[50vh] md:h-full relative">
+  return (
+    <div className="flex flex-col md:flex-row w-screen h-[100dvh] overflow-hidden bg-slate-950">
+      {/* Sidebar on Left (Desktop: Always visible side column; Mobile: full screen if active) */}
+      <div
+        className={`w-full md:w-[350px] lg:w-[375px] h-[100dvh] shrink-0 z-20 ${
+          mobileView === 'sidebar' ? 'flex flex-col' : 'hidden md:flex md:flex-col'
+        }`}
+      >
+        <Sidebar
+          waypoints={waypoints}
+          routeData={routeData}
+          dayDepartureTimes={dayDepartureTimes}
+          onSetDayDepartureTime={handleSetDayDepartureTime}
+          totalDays={totalDays}
+          activeDayTab={activeDayTab}
+          onActiveDayTabChange={setActiveDayTab}
+          onAddDay={handleAddDay}
+          onSetTotalDays={handleSetTotalDays}
+          onRemoveDay={handleRemoveDayConfirmed}
+          onSwapDays={handleSwapDays}
+          onChangeWaypointDay={handleChangeWaypointDay}
+          onRenameWaypoint={handleRenameWaypoint}
+          onRemoveWaypoint={handleRemoveWaypoint}
+          onReorderWaypoint={handleReorderWaypoint}
+          onChangeCategory={handleChangeCategory}
+          onChangeStopDuration={handleChangeStopDuration}
+          onClearTrip={handleClearTrip}
+          isLoopClosed={isLoopClosed}
+          onToggleCloseLoop={handleToggleCloseLoop}
+          isLoading={isLoading}
+          error={error}
+          selectedWaypointId={selectedWaypointId}
+          onSelectWaypoint={handleSelectWaypoint}
+        />
+      </div>
+
+      {/* Interactive Map on Right with SearchBar (Desktop: flex-1; Mobile: full screen if active) */}
+      <main
+        className={`flex-1 h-[100dvh] relative ${
+          mobileView === 'map' ? 'block' : 'hidden md:block'
+        }`}
+      >
         <Map
           waypoints={waypoints}
           routeData={routeData}
@@ -414,6 +489,32 @@ export function App() {
           onFitRoute={handleFitRoute}
         />
       </main>
+
+      {/* Floating Mobile Mode Switcher (Visible only on mobile screens < md) */}
+      <div className="md:hidden fixed bottom-4 left-1/2 -translate-x-1/2 z-[1000] flex items-center bg-slate-900/95 backdrop-blur-2xl border border-slate-700/90 p-1 rounded-2xl shadow-2xl">
+        <button
+          onClick={() => setMobileView('map')}
+          className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+            mobileView === 'map'
+              ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/30'
+              : 'text-slate-400 hover:text-slate-200'
+          }`}
+        >
+          <Compass className="w-3.5 h-3.5" />
+          <span>Mappa</span>
+        </button>
+        <button
+          onClick={() => setMobileView('sidebar')}
+          className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+            mobileView === 'sidebar'
+              ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/30'
+              : 'text-slate-400 hover:text-slate-200'
+          }`}
+        >
+          <Route className="w-3.5 h-3.5" />
+          <span>Itinerario {waypoints.length > 0 ? `(${waypoints.length})` : ''}</span>
+        </button>
+      </div>
     </div>
   );
 }

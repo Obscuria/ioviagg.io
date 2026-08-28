@@ -338,7 +338,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <h1 className="text-base font-bold bg-gradient-to-r from-white via-indigo-100 to-sky-200 bg-clip-text text-transparent leading-none tracking-tight">
               ioviagg.io
             </h1>
-            <span className="text-[10px] text-slate-400 leading-none">Travel Planner</span>
+            <div className="flex items-center gap-1.5 text-[10px] text-slate-400 leading-none mt-0.5">
+              <span>Travel Planner</span>
+              <span>•</span>
+              <span className="flex items-center gap-1 text-emerald-400 font-medium">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                <span>Salvato</span>
+              </span>
+            </div>
           </div>
         </div>
 
@@ -648,7 +655,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       )}
 
       {/* Waypoints List (Minimalist Clean Cards) */}
-      <div className="flex-1 overflow-y-auto p-2.5 px-3 space-y-1.5">
+      <div className="flex-1 overflow-y-auto p-2.5 px-3 space-y-1.5 pb-24 md:pb-3">
         {displayedWaypoints.map((waypoint, index) => {
           const globalIndex = waypoints.findIndex((w) => w.id === waypoint.id);
           const isStart = globalIndex === 0;
