@@ -31,6 +31,7 @@ import {
   Pencil,
   Timer,
   Route,
+  Check,
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -176,6 +177,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
   // Drag and Drop state for Day tabs
   const [draggedDay, setDraggedDay] = useState<number | null>(null);
   const [dragOverDay, setDragOverDay] = useState<number | null>(null);
+
+  // Inline editing state for waypoint title
+  const [editingWaypointId, setEditingWaypointId] = useState<string | null>(null);
+  const [editingTitle, setEditingTitle] = useState<string>('');
 
   const totalStopMinutes = waypoints.reduce((acc, w) => acc + (w.stopDurationMin || 0), 0);
 
@@ -693,9 +698,80 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   {/* Title & Schedule Summary */}
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between gap-1.5">
-                      <h4 className="font-semibold text-xs text-white truncate leading-tight">
-                        {waypoint.title}
-                      </h4>
+                      {editingWaypointId === waypoint.id ? (
+                        <div
+                          className="flex items-center gap-1 flex-1 min-w-0"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <input
+                            autoFocus
+                            type="text"
+                            value={editingTitle}
+                            onChange={(e) => setEditingTitle(e.target.value)}
+                            onBlur={() => {
+                              if (editingTitle.trim() && onRenameWaypoint) {
+                                onRenameWaypoint(waypoint.id, editingTitle.trim());
+                              }
+                              setEditingWaypointId(null);
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                if (editingTitle.trim() && onRenameWaypoint) {
+                                  onRenameWaypoint(waypoint.id, editingTitle.trim());
+                                }
+                                setEditingWaypointId(null);
+                              } else if (e.key === 'Escape') {
+                                setEditingWaypointId(null);
+                              }
+                            }}
+                            className="w-full bg-slate-900 border border-indigo-500 rounded px-1.5 py-0.5 text-xs text-white font-semibold focus:outline-none ring-1 ring-indigo-400"
+                            placeholder="Nome tappa..."
+                          />
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (editingTitle.trim() && onRenameWaypoint) {
+                                onRenameWaypoint(waypoint.id, editingTitle.trim());
+                              }
+                              setEditingWaypointId(null);
+                            }}
+                            className="p-1 text-emerald-400 hover:text-emerald-300 rounded hover:bg-slate-800 shrink-0"
+                            title="Salva nome"
+                          >
+                            <Check className="w-3 h-3" />
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-1 min-w-0 flex-1 group/title">
+                          {onRenameWaypoint && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setEditingWaypointId(waypoint.id);
+                                setEditingTitle(waypoint.title);
+                              }}
+                              className="p-0.5 text-slate-500 hover:text-indigo-300 rounded hover:bg-slate-800/80 shrink-0 transition-colors cursor-pointer"
+                              title="Rinomina tappa"
+                            >
+                              <Pencil className="w-2.5 h-2.5" />
+                            </button>
+                          )}
+                          <h4
+                            className="font-semibold text-xs text-white truncate leading-tight hover:text-indigo-200 cursor-text"
+                            onDoubleClick={(e) => {
+                              e.stopPropagation();
+                              if (onRenameWaypoint) {
+                                setEditingWaypointId(waypoint.id);
+                                setEditingTitle(waypoint.title);
+                              }
+                            }}
+                            title="Doppio click per rinominare"
+                          >
+                            {waypoint.title}
+                          </h4>
+                        </div>
+                      )}
+
                       <div className="flex items-center gap-1 shrink-0">
                         {currentDuration > 0 && !isStart && (
                           <span className="text-[10px] text-orange-300 bg-orange-500/15 px-1.5 py-0.2 rounded font-mono">
@@ -733,23 +809,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     className="mt-2.5 pt-2 border-t border-slate-800/80 space-y-2"
                     onClick={(e) => e.stopPropagation()}
                   >
-                    {/* Rename Waypoint Title */}
-                    {onRenameWaypoint && (
-                      <div className="space-y-1">
-                        <label className="text-[10px] uppercase font-bold text-slate-400 flex items-center gap-1">
-                          <Pencil className="w-2.5 h-2.5 text-indigo-400" />
-                          <span>Nome Tappa:</span>
-                        </label>
-                        <input
-                          type="text"
-                          value={waypoint.title}
-                          onChange={(e) => onRenameWaypoint(waypoint.id, e.target.value)}
-                          className="w-full bg-slate-900 border border-slate-700/90 rounded-lg px-2 py-1 text-xs text-white font-medium focus:ring-1 focus:ring-indigo-500 focus:outline-none"
-                          placeholder="Inserisci nome tappa..."
-                        />
-                      </div>
-                    )}
-
                     {/* Day selector & Reorder / Delete toolbar */}
                     <div className="flex items-center justify-between text-[11px]">
                       {/* Day Assignment */}
