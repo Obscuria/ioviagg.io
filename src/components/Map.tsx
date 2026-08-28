@@ -328,12 +328,12 @@ function createPendingPreviewIcon(category: WaypointCategory) {
     category === 'food'
       ? '🍽️'
       : category === 'poi'
-      ? '🏔️'
-      : category === 'parking'
-      ? '🅿️'
-      : category === 'stay'
-      ? '🛏️'
-      : '➕';
+        ? '🏔️'
+        : category === 'parking'
+          ? '🅿️'
+          : category === 'stay'
+            ? '🛏️'
+            : '➕';
 
   const html = `
     <div class="custom-waypoint-pin cursor-pointer">
@@ -489,11 +489,10 @@ export const Map: React.FC<MapProps> = ({
                     setMapStyle(key);
                     setShowLayerMenu(false);
                   }}
-                  className={`w-full text-left px-2.5 py-1.5 rounded-lg text-xs transition-colors flex items-center justify-between cursor-pointer ${
-                    mapStyle === key
+                  className={`w-full text-left px-2.5 py-1.5 rounded-lg text-xs transition-colors flex items-center justify-between cursor-pointer ${mapStyle === key
                       ? 'bg-indigo-600 text-white font-semibold'
                       : 'text-slate-300 hover:bg-slate-800 hover:text-white'
-                  }`}
+                    }`}
                 >
                   <span className="truncate">{MAP_STYLES[key].name}</span>
                   {mapStyle === key && <Check className="w-3 h-3 text-white shrink-0 ml-1" />}
@@ -658,11 +657,10 @@ export const Map: React.FC<MapProps> = ({
                         setPendingPoint((p) => (p ? { ...p, category: 'standard', stopDurationMin: 15 } : null));
                       }}
                       onMouseDown={(e) => e.stopPropagation()}
-                      className={`text-[10px] py-1 px-1 rounded text-center transition-colors ${
-                        pendingPoint.category === 'standard'
+                      className={`text-[10px] py-1 px-1 rounded text-center transition-colors ${pendingPoint.category === 'standard'
                           ? 'bg-emerald-500/30 text-emerald-300 border border-emerald-500/50 font-bold'
                           : 'bg-slate-800 text-slate-400 hover:text-white'
-                      }`}
+                        }`}
                     >
                       📍 Base
                     </button>
@@ -672,11 +670,10 @@ export const Map: React.FC<MapProps> = ({
                         setPendingPoint((p) => (p ? { ...p, category: 'food', stopDurationMin: 45 } : null));
                       }}
                       onMouseDown={(e) => e.stopPropagation()}
-                      className={`text-[10px] py-1 px-1 rounded text-center transition-colors ${
-                        pendingPoint.category === 'food'
+                      className={`text-[10px] py-1 px-1 rounded text-center transition-colors ${pendingPoint.category === 'food'
                           ? 'bg-orange-500/30 text-orange-300 border border-orange-500/50 font-bold'
                           : 'bg-slate-800 text-slate-400 hover:text-white'
-                      }`}
+                        }`}
                     >
                       🍽️ Cibo
                     </button>
@@ -686,11 +683,10 @@ export const Map: React.FC<MapProps> = ({
                         setPendingPoint((p) => (p ? { ...p, category: 'poi', stopDurationMin: 60 } : null));
                       }}
                       onMouseDown={(e) => e.stopPropagation()}
-                      className={`text-[10px] py-1 px-1 rounded text-center transition-colors ${
-                        pendingPoint.category === 'poi'
+                      className={`text-[10px] py-1 px-1 rounded text-center transition-colors ${pendingPoint.category === 'poi'
                           ? 'bg-amber-500/30 text-amber-300 border border-amber-500/50 font-bold'
                           : 'bg-slate-800 text-slate-400 hover:text-white'
-                      }`}
+                        }`}
                     >
                       🏔️ POI
                     </button>
@@ -700,11 +696,10 @@ export const Map: React.FC<MapProps> = ({
                         setPendingPoint((p) => (p ? { ...p, category: 'parking', stopDurationMin: 15 } : null));
                       }}
                       onMouseDown={(e) => e.stopPropagation()}
-                      className={`text-[10px] py-1 px-1 rounded text-center transition-colors ${
-                        pendingPoint.category === 'parking'
+                      className={`text-[10px] py-1 px-1 rounded text-center transition-colors ${pendingPoint.category === 'parking'
                           ? 'bg-blue-500/30 text-blue-300 border border-blue-500/50 font-bold'
                           : 'bg-slate-800 text-slate-400 hover:text-white'
-                      }`}
+                        }`}
                     >
                       🅿️ Park
                     </button>
@@ -714,11 +709,10 @@ export const Map: React.FC<MapProps> = ({
                         setPendingPoint((p) => (p ? { ...p, category: 'stay', stopDurationMin: 480 } : null));
                       }}
                       onMouseDown={(e) => e.stopPropagation()}
-                      className={`text-[10px] py-1 px-1 rounded text-center transition-colors ${
-                        pendingPoint.category === 'stay'
+                      className={`text-[10px] py-1 px-1 rounded text-center transition-colors ${pendingPoint.category === 'stay'
                           ? 'bg-purple-500/30 text-purple-300 border border-purple-500/50 font-bold'
                           : 'bg-slate-800 text-slate-400 hover:text-white'
-                      }`}
+                        }`}
                     >
                       🛏️ Notte
                     </button>
@@ -740,11 +734,10 @@ export const Map: React.FC<MapProps> = ({
                           setPendingPoint((p) => (p ? { ...p, stopDurationMin: mins } : null));
                         }}
                         onMouseDown={(e) => e.stopPropagation()}
-                        className={`text-[10px] px-1.5 py-0.5 rounded transition-all ${
-                          pendingPoint.stopDurationMin === mins
+                        className={`text-[10px] px-1.5 py-0.5 rounded transition-all ${pendingPoint.stopDurationMin === mins
                             ? 'bg-orange-500 text-white font-bold'
                             : 'bg-slate-800 text-slate-400 hover:text-white'
-                        }`}
+                          }`}
                       >
                         {mins >= 60 ? `${mins / 60}h` : `${mins}m`}
                       </button>
@@ -833,11 +826,10 @@ export const Map: React.FC<MapProps> = ({
                           e.stopPropagation();
                           onToggleCloseLoop();
                         }}
-                        className={`w-full py-1.5 px-2.5 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-md ${
-                          isLoopClosed
+                        className={`w-full py-1.5 px-2.5 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-md ${isLoopClosed
                             ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 hover:bg-rose-500/20 hover:text-rose-300'
                             : 'bg-indigo-600 hover:bg-indigo-500 text-white'
-                        }`}
+                          }`}
                       >
                         <Repeat className="w-3.5 h-3.5" />
                         <span>{isLoopClosed ? 'Apri Anello (Rimuovi Ritorno)' : 'Chiudi Anello (Torna alla Partenza)'}</span>
@@ -897,11 +889,10 @@ export const Map: React.FC<MapProps> = ({
                           onChangeCategory(waypoint.id, 'standard');
                         }}
                         onMouseDown={(e) => e.stopPropagation()}
-                        className={`text-[10px] py-1 px-1 rounded text-center transition-colors ${
-                          waypoint.category === 'standard'
+                        className={`text-[10px] py-1 px-1 rounded text-center transition-colors ${waypoint.category === 'standard'
                             ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-bold'
                             : 'bg-slate-800 text-slate-400 hover:text-white'
-                        }`}
+                          }`}
                         title="Tappa Standard"
                       >
                         📍 Base
@@ -912,11 +903,10 @@ export const Map: React.FC<MapProps> = ({
                           onChangeCategory(waypoint.id, 'food');
                         }}
                         onMouseDown={(e) => e.stopPropagation()}
-                        className={`text-[10px] py-1 px-1 rounded text-center transition-colors ${
-                          waypoint.category === 'food'
+                        className={`text-[10px] py-1 px-1 rounded text-center transition-colors ${waypoint.category === 'food'
                             ? 'bg-orange-500/20 text-orange-300 border border-orange-500/40 font-bold'
                             : 'bg-slate-800 text-slate-400 hover:text-white'
-                        }`}
+                          }`}
                         title="Ristoro / Cibo"
                       >
                         🍽️ Cibo
@@ -927,11 +917,10 @@ export const Map: React.FC<MapProps> = ({
                           onChangeCategory(waypoint.id, 'poi');
                         }}
                         onMouseDown={(e) => e.stopPropagation()}
-                        className={`text-[10px] py-1 px-1 rounded text-center transition-colors ${
-                          waypoint.category === 'poi'
+                        className={`text-[10px] py-1 px-1 rounded text-center transition-colors ${waypoint.category === 'poi'
                             ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 font-bold'
                             : 'bg-slate-800 text-slate-400 hover:text-white'
-                        }`}
+                          }`}
                         title="Punto di Interesse / Natura / Montagna"
                       >
                         🏔️ POI
@@ -942,11 +931,10 @@ export const Map: React.FC<MapProps> = ({
                           onChangeCategory(waypoint.id, 'parking');
                         }}
                         onMouseDown={(e) => e.stopPropagation()}
-                        className={`text-[10px] py-1 px-1 rounded text-center transition-colors ${
-                          waypoint.category === 'parking'
+                        className={`text-[10px] py-1 px-1 rounded text-center transition-colors ${waypoint.category === 'parking'
                             ? 'bg-blue-500/20 text-blue-300 border border-blue-500/40 font-bold'
                             : 'bg-slate-800 text-slate-400 hover:text-white'
-                        }`}
+                          }`}
                         title="Parcheggio"
                       >
                         🅿️ Park
@@ -957,11 +945,10 @@ export const Map: React.FC<MapProps> = ({
                           onChangeCategory(waypoint.id, 'stay');
                         }}
                         onMouseDown={(e) => e.stopPropagation()}
-                        className={`text-[10px] py-1 px-1 rounded text-center transition-colors ${
-                          waypoint.category === 'stay'
+                        className={`text-[10px] py-1 px-1 rounded text-center transition-colors ${waypoint.category === 'stay'
                             ? 'bg-purple-500/20 text-purple-300 border border-purple-500/40 font-bold'
                             : 'bg-slate-800 text-slate-400 hover:text-white'
-                        }`}
+                          }`}
                         title="Pernottamento / Hotel"
                       >
                         🛏️ Notte
