@@ -2,11 +2,9 @@ import React, { useState, useCallback } from 'react';
 import type {
   Waypoint,
   RouteData,
-  TripPreset,
   WaypointCategory,
   RouteLeg,
 } from '../types/trip';
-import { TRIP_PRESETS } from '../data/presets';
 import {
   MapPin,
   Clock,
@@ -16,7 +14,6 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
-  Sparkles,
   RotateCcw,
   AlertCircle,
   Car,
@@ -56,7 +53,6 @@ interface SidebarProps {
   onChangeCategory: (id: string, category: WaypointCategory) => void;
   onChangeStopDuration: (id: string, durationMinutes: number) => void;
   onClearTrip: () => void;
-  onLoadPreset: (preset: TripPreset) => void;
   isLoopClosed?: boolean;
   onToggleCloseLoop?: () => void;
   isLoading: boolean;
@@ -193,7 +189,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onChangeCategory,
   onChangeStopDuration,
   onClearTrip,
-  onLoadPreset,
   isLoopClosed = false,
   onToggleCloseLoop,
   isLoading,
@@ -226,9 +221,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   // Confirmation state for deleting a day with waypoints
   const [dayToDelete, setDayToDelete] = useState<number | null>(null);
-
-  // Preset dropdown toggle state
-  const [showPresetsMenu, setShowPresetsMenu] = useState<boolean>(false);
 
   // Drag and Drop state for Day tabs
   const [draggedDay, setDraggedDay] = useState<number | null>(null);
@@ -370,43 +362,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <Repeat className="w-3 h-3 text-emerald-400" />
               <span>{isLoopClosed ? 'Anello Chiuso' : 'Chiudi Anello'}</span>
             </button>
-          )}
-
-          {/* Preset Demo Picker Button */}
-          <button
-            onClick={() => setShowPresetsMenu((prev) => !prev)}
-            className="flex items-center gap-1 text-[11px] font-medium text-slate-300 hover:text-white bg-slate-800/70 hover:bg-indigo-600/30 px-2 py-1 rounded-lg border border-slate-700/60 transition-colors cursor-pointer"
-            title="Scegli itinerario consigliato"
-          >
-            <Sparkles className="w-3 h-3 text-indigo-400" />
-            <span>Itinerari</span>
-          </button>
-
-          {/* Presets Popover Menu */}
-          {showPresetsMenu && (
-            <div className="absolute right-0 top-9 w-60 bg-slate-900 border border-slate-700/80 rounded-xl p-1.5 shadow-2xl z-50 space-y-1">
-              <div className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400 flex items-center justify-between">
-                <span>Itinerari Demo</span>
-                <button onClick={() => setShowPresetsMenu(false)} className="text-slate-400 hover:text-white">
-                  <X className="w-3 h-3" />
-                </button>
-              </div>
-              {TRIP_PRESETS.map((preset) => (
-                <button
-                  key={preset.id}
-                  onClick={() => {
-                    onLoadPreset(preset);
-                    setShowPresetsMenu(false);
-                  }}
-                  className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-indigo-600/20 hover:text-white text-slate-300 text-xs transition-colors flex items-center justify-between group cursor-pointer"
-                >
-                  <span className="truncate">{preset.name}</span>
-                  <span className="text-[10px] text-indigo-400 font-mono shrink-0 ml-1">
-                    {preset.days || 1}G
-                  </span>
-                </button>
-              ))}
-            </div>
           )}
 
           {waypoints.length > 0 && (

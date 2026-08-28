@@ -1,40 +1,20 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import type { Waypoint, RouteData, TripPreset, SearchResult, WaypointCategory } from './types/trip';
+import type { Waypoint, RouteData, SearchResult, WaypointCategory } from './types/trip';
 import { fetchOSRMRoute, reverseGeocode } from './services/osrm';
 import { Sidebar } from './components/Sidebar';
 import { Map } from './components/Map';
-import { TRIP_PRESETS } from './data/presets';
 
 export function App() {
-  const initialPreset = TRIP_PRESETS[0];
-
-  // Number of trip days & active day tab filter
-  const [totalDays, setTotalDays] = useState<number>(initialPreset.days || 3);
+  // Number of trip days & active day tab filter (starts clean and blank)
+  const [totalDays, setTotalDays] = useState<number>(1);
   const [activeDayTab, setActiveDayTab] = useState<number | null>(null); // null = "Tutti i Giorni"
 
-  // Initialize with the Tuscany tour by default for instant delight
-  const [waypoints, setWaypoints] = useState<Waypoint[]>(() => {
-    return initialPreset.waypoints.map((w, idx) => {
-      const cat = w.category || (idx === 0 ? 'standard' : idx === 1 ? 'food' : idx === 2 ? 'poi' : idx === 3 ? 'parking' : 'stay');
-      const defaultDuration = cat === 'stay' ? 480 : cat === 'food' ? 45 : cat === 'poi' ? 60 : 15;
-      return {
-        id: `initial-${idx}-${Date.now()}`,
-        lat: w.lat,
-        lng: w.lng,
-        title: w.title,
-        address: w.address,
-        category: cat,
-        stopDurationMin: defaultDuration,
-        day: w.day || 1,
-      };
-    });
-  });
+  // Empty initial waypoints for a clean custom trip
+  const [waypoints, setWaypoints] = useState<Waypoint[]>([]);
 
   const [routeData, setRouteData] = useState<RouteData | null>(null);
   const [dayDepartureTimes, setDayDepartureTimes] = useState<Record<number, string>>({
     1: '09:00',
-    2: '09:00',
-    3: '09:00',
   });
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
@@ -345,32 +325,6 @@ export function App() {
     setActiveDayTab(null);
   }, []);
 
-  // Load preset itinerary
-  const handleLoadPreset = useCallback((preset: TripPreset) => {
-    const presetDays = preset.days || 1;
-    setTotalDays(presetDays);
-    setDayDepartureTimes({ 1: '09:00', 2: '09:00', 3: '09:00' });
-    setActiveDayTab(null);
-
-    const loadedWaypoints: Waypoint[] = preset.waypoints.map((w, idx) => {
-      const cat = w.category || 'standard';
-      const defaultDuration = cat === 'stay' ? 480 : cat === 'food' ? 45 : cat === 'poi' ? 60 : 15;
-      return {
-        id: `preset-${idx}-${Date.now()}`,
-        lat: w.lat,
-        lng: w.lng,
-        title: w.title,
-        address: w.address,
-        category: cat,
-        stopDurationMin: defaultDuration,
-        day: w.day || 1,
-      };
-    });
-    setWaypoints(loadedWaypoints);
-    setSelectedWaypointId(null);
-    setFitTrigger((prev) => prev + 1);
-  }, []);
-
   // Determine if trip is already a closed loop (start == end)
   const isLoopClosed = useMemo(() => {
     if (waypoints.length < 2) return false;
@@ -434,7 +388,6 @@ export function App() {
         onChangeCategory={handleChangeCategory}
         onChangeStopDuration={handleChangeStopDuration}
         onClearTrip={handleClearTrip}
-        onLoadPreset={handleLoadPreset}
         isLoopClosed={isLoopClosed}
         onToggleCloseLoop={handleToggleCloseLoop}
         isLoading={isLoading}
