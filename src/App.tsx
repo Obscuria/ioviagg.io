@@ -29,6 +29,11 @@ export function App() {
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedWaypointId, setSelectedWaypointId] = useState<string | null>(null);
+  const [fitTrigger, setFitTrigger] = useState<number>(0);
+
+  const handleFitRoute = useCallback(() => {
+    setFitTrigger((prev) => prev + 1);
+  }, []);
 
   // Recalculate route whenever waypoints change
   const calculateRoute = useCallback(async (currentWaypoints: Waypoint[]) => {
@@ -233,6 +238,7 @@ export function App() {
     });
     setWaypoints(loadedWaypoints);
     setSelectedWaypointId(null);
+    setFitTrigger((prev) => prev + 1);
   }, []);
 
   return (
@@ -266,6 +272,8 @@ export function App() {
           onChangeCategory={handleChangeCategory}
           onChangeStopDuration={handleChangeStopDuration}
           selectedWaypointId={selectedWaypointId}
+          fitTrigger={fitTrigger}
+          onFitRoute={handleFitRoute}
         />
       </main>
     </div>

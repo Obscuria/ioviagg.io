@@ -12,7 +12,6 @@ import L from 'leaflet';
 import type { Waypoint, RouteData, SearchResult, WaypointCategory } from '../types/trip';
 import { SearchBar, CategoryBadge } from './SearchBar';
 import { reverseGeocode } from '../services/osrm';
-import { fetchPOIsInBounds, type MapPOI, type MapBounds } from '../services/poi';
 import {
   Trash2,
   Clock,
@@ -23,9 +22,7 @@ import {
   Check,
   Plus,
   Minus,
-  Eye,
-  EyeOff,
-  Layers,
+  Maximize2,
 } from 'lucide-react';
 
 interface PendingPoint {
@@ -54,6 +51,8 @@ interface MapProps {
   onChangeCategory: (id: string, category: WaypointCategory) => void;
   onChangeStopDuration?: (id: string, durationMinutes: number) => void;
   selectedWaypointId?: string | null;
+  fitTrigger?: number;
+  onFitRoute?: () => void;
 }
 
 // Map Invalidator & Resizer Component: ensures Leaflet container bounds are always synced with DOM
@@ -61,11 +60,9 @@ function MapResizer() {
   const map = useMap();
 
   useEffect(() => {
-    // Invalidate size immediately and after layout settling
     map.invalidateSize();
     const timer1 = setTimeout(() => map.invalidateSize(), 100);
     const timer2 = setTimeout(() => map.invalidateSize(), 300);
-    const timer3 = setTimeout(() => map.invalidateSize(), 600);
 
     const container = map.getContainer();
     let resizeObserver: ResizeObserver | null = null;
@@ -84,7 +81,6 @@ function MapResizer() {
     return () => {
       clearTimeout(timer1);
       clearTimeout(timer2);
-      clearTimeout(timer3);
       if (resizeObserver) resizeObserver.disconnect();
       window.removeEventListener('resize', handleWindowResize);
     };
@@ -103,7 +99,6 @@ function MapEvents({
 
   useMapEvents({
     click(e) {
-      // Sync map container size just in case before handling click
       map.invalidateSize({ debounceMoveend: true });
 
       // Avoid firing map click if the click originated inside a popup, control, or button
@@ -123,29 +118,56 @@ function MapEvents({
   return null;
 }
 
-// Auto Fit Bounds Component
+// Auto Fit Bounds Component: ONLY fits the camera on initial mount or explicit fit trigger
 function MapBoundsController({
   waypoints,
   routeCoordinates,
+  fitTrigger,
 }: {
   waypoints: Waypoint[];
   routeCoordinates?: [number, number][];
+  fitTrigger?: number;
+}) {
+  const map = useMap();
+  const isFirstMount = useRef(true);
+  const lastTriggerRef = useRef<number | undefined>(fitTrigger);
+
+  useEffect(() => {
+    const shouldFit = isFirstMount.current || fitTrigger !== lastTriggerRef.current;
+    if (!shouldFit) return;
+
+    isFirstMount.current = false;
+    lastTriggerRef.current = fitTrigger;
+
+    if (routeCoordinates && routeCoordinates.length > 0) {
+      const bounds = L.latLngBounds(routeCoordinates);
+      map.fitBounds(bounds, { padding: [50, 50], maxZoom: 14, animate: true });
+    } else if (waypoints.length > 0) {
+      const bounds = L.latLngBounds(waypoints.map((w) => [w.lat, w.lng]));
+      if (waypoints.length === 1) {
+        map.setView([waypoints[0].lat, waypoints[0].lng], 10, { animate: true });
+      } else {
+        map.fitBounds(bounds, { padding: [60, 60], maxZoom: 13, animate: true });
+      }
+    }
+  }, [fitTrigger, routeCoordinates, waypoints, map]);
+
+  return null;
+}
+
+// Smooth pan controller when a waypoint is selected in the sidebar
+function MapPanController({
+  selectedWaypoint,
+}: {
+  selectedWaypoint?: Waypoint | null;
 }) {
   const map = useMap();
 
   useEffect(() => {
-    if (routeCoordinates && routeCoordinates.length > 0) {
-      const bounds = L.latLngBounds(routeCoordinates);
-      map.fitBounds(bounds, { padding: [50, 50], maxZoom: 14, animate: false });
-    } else if (waypoints.length > 0) {
-      const bounds = L.latLngBounds(waypoints.map((w) => [w.lat, w.lng]));
-      if (waypoints.length === 1) {
-        map.setView([waypoints[0].lat, waypoints[0].lng], 10, { animate: false });
-      } else {
-        map.fitBounds(bounds, { padding: [60, 60], maxZoom: 13, animate: false });
-      }
+    if (selectedWaypoint) {
+      map.panTo([selectedWaypoint.lat, selectedWaypoint.lng], { animate: true, duration: 0.5 });
     }
-  }, [waypoints, routeCoordinates, map]);
+  }, [selectedWaypoint, map]);
 
   return null;
 }
@@ -201,7 +223,9 @@ function createWaypointIcon(
     }
   }
 
-  const selectedCircleStyle = isSelected ? '!ring-4 !ring-white shadow-2xl scale-110' : '';
+  const selectedCircleStyle = isSelected
+    ? '!ring-4 !ring-white shadow-2xl scale-110'
+    : '';
 
   const html = `
     <div class="custom-waypoint-pin cursor-pointer">
@@ -252,98 +276,6 @@ function createPendingPreviewIcon(category: WaypointCategory) {
   });
 }
 
-// Discovered OSM POI mini marker icon for interactive map discovery
-function createDiscoveredPOIIcon(poi: MapPOI) {
-  let bg = 'from-slate-700 to-slate-800 border-slate-500 ring-slate-400/30';
-  if (poi.category === 'food') {
-    bg = 'from-orange-500 to-amber-600 border-orange-300 ring-orange-400/50 shadow-orange-500/40';
-  } else if (poi.category === 'poi') {
-    bg = 'from-amber-500 to-yellow-600 border-amber-300 ring-amber-400/50 shadow-amber-500/40';
-  } else if (poi.category === 'parking') {
-    bg = 'from-blue-600 to-cyan-600 border-blue-300 ring-blue-400/50 shadow-blue-500/40';
-  } else if (poi.category === 'stay') {
-    bg = 'from-purple-600 to-indigo-600 border-purple-300 ring-purple-400/50 shadow-purple-500/40';
-  }
-
-  const html = `
-    <div class="group relative flex items-center justify-center cursor-pointer transition-transform hover:scale-125 duration-150">
-      <div class="w-7 h-7 rounded-full bg-gradient-to-tr ${bg} text-white font-bold text-[11px] shadow-lg border-2 ring-2 flex items-center justify-center">
-        <span class="leading-none select-none">${poi.icon}</span>
-      </div>
-    </div>
-  `;
-
-  return L.divIcon({
-    className: 'bg-transparent border-0',
-    html,
-    iconSize: [28, 28],
-    iconAnchor: [14, 14],
-    popupAnchor: [0, -16],
-  });
-}
-
-// Interactive Map POIs Discovery Component (Fetches when zoom >= 12)
-function MapPOIDiscoveryController({
-  onPOIsLoaded,
-  onZoomChange,
-  showPOIs,
-}: {
-  onPOIsLoaded: (pois: MapPOI[], isLoading: boolean) => void;
-  onZoomChange: (zoom: number) => void;
-  showPOIs: boolean;
-}) {
-  const map = useMap();
-  const fetchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const fetchCurrentBounds = useCallback(async () => {
-    const zoom = map.getZoom();
-    onZoomChange(zoom);
-
-    if (!showPOIs || zoom < 12) {
-      onPOIsLoaded([], false);
-      return;
-    }
-
-    onPOIsLoaded([], true);
-
-    const b = map.getBounds();
-    const bounds: MapBounds = {
-      south: b.getSouth(),
-      west: b.getWest(),
-      north: b.getNorth(),
-      east: b.getEast(),
-    };
-
-    try {
-      const results = await fetchPOIsInBounds(bounds, 50);
-      onPOIsLoaded(results, false);
-    } catch {
-      onPOIsLoaded([], false);
-    }
-  }, [map, showPOIs, onPOIsLoaded, onZoomChange]);
-
-  useEffect(() => {
-    if (fetchTimeoutRef.current) clearTimeout(fetchTimeoutRef.current);
-    fetchTimeoutRef.current = setTimeout(fetchCurrentBounds, 300);
-
-    const onMoveEnd = () => {
-      if (fetchTimeoutRef.current) clearTimeout(fetchTimeoutRef.current);
-      fetchTimeoutRef.current = setTimeout(fetchCurrentBounds, 350);
-    };
-
-    map.on('moveend', onMoveEnd);
-    map.on('zoomend', onMoveEnd);
-
-    return () => {
-      if (fetchTimeoutRef.current) clearTimeout(fetchTimeoutRef.current);
-      map.off('moveend', onMoveEnd);
-      map.off('zoomend', onMoveEnd);
-    };
-  }, [map, fetchCurrentBounds]);
-
-  return null;
-}
-
 export const Map: React.FC<MapProps> = ({
   waypoints,
   routeData,
@@ -353,6 +285,8 @@ export const Map: React.FC<MapProps> = ({
   onChangeCategory,
   onChangeStopDuration,
   selectedWaypointId,
+  fitTrigger,
+  onFitRoute,
 }) => {
   const defaultCenter: [number, number] = [42.5, 12.5];
   const defaultZoom = 6;
@@ -360,17 +294,7 @@ export const Map: React.FC<MapProps> = ({
   // Pending point state for click confirmation
   const [pendingPoint, setPendingPoint] = useState<PendingPoint | null>(null);
 
-  // Discovered Map POIs state
-  const [discoveredPOIs, setDiscoveredPOIs] = useState<MapPOI[]>([]);
-  const [isLoadingPOIs, setIsLoadingPOIs] = useState<boolean>(false);
-  const [currentZoom, setCurrentZoom] = useState<number>(defaultZoom);
-  const [showPOILayer, setShowPOILayer] = useState<boolean>(true);
-
-  // Handle POIs loaded callback
-  const handlePOIsLoaded = useCallback((pois: MapPOI[], loading: boolean) => {
-    setDiscoveredPOIs(pois);
-    setIsLoadingPOIs(loading);
-  }, []);
+  const selectedWaypoint = waypoints.find((w) => w.id === selectedWaypointId);
 
   // Handle map click: initiate pending point with preview & confirmation popup
   const handleMapClick = useCallback(async (coords: { lat: number; lng: number }) => {
@@ -379,7 +303,7 @@ export const Map: React.FC<MapProps> = ({
       lng: coords.lng,
       title: 'Località selezionata...',
       category: 'standard',
-      stopDurationMin: 30,
+      stopDurationMin: 15,
       isLoading: true,
     });
 
@@ -429,21 +353,6 @@ export const Map: React.FC<MapProps> = ({
     setPendingPoint(null);
   };
 
-  // Quick add discovered POI to trip
-  const handleAddDiscoveredPOI = (poi: MapPOI, e: React.MouseEvent) => {
-    e.stopPropagation();
-    e.preventDefault();
-    const defaultDur = poi.category === 'stay' ? 480 : poi.category === 'food' ? 45 : poi.category === 'poi' ? 60 : 15;
-    onAddWaypoint({
-      lat: poi.lat,
-      lng: poi.lng,
-      title: poi.name,
-      address: poi.categoryLabel,
-      category: poi.category,
-      stopDurationMin: defaultDur,
-    });
-  };
-
   return (
     <div className="relative w-full h-full bg-slate-950 overflow-hidden select-none">
       {/* Floating Top Search Bar */}
@@ -451,47 +360,23 @@ export const Map: React.FC<MapProps> = ({
         <SearchBar onSelectPlace={onSelectSearchResult} />
       </div>
 
-      {/* Floating Interactive POI Indicator & Toggle Controls */}
+      {/* Floating Action Controls */}
       <div className="absolute top-4 right-4 z-[400] flex items-center gap-2">
-        <button
-          onClick={() => setShowPOILayer((prev) => !prev)}
-          className="bg-slate-900/90 hover:bg-slate-800 border border-slate-700/80 px-3 py-2 rounded-xl shadow-xl flex items-center gap-2 text-xs text-slate-200 transition-colors cursor-pointer"
-          title="Attiva/disattiva punti di interesse interattivi sulla mappa"
-        >
-          <Layers className="w-3.5 h-3.5 text-indigo-400" />
-          <span className="font-medium hidden sm:inline">POI Mappa:</span>
-          {showPOILayer ? (
-            <span className="flex items-center gap-1 text-emerald-400 font-semibold">
-              <Eye className="w-3.5 h-3.5" />
-              <span>Attivi</span>
-            </span>
-          ) : (
-            <span className="flex items-center gap-1 text-slate-400 font-medium">
-              <EyeOff className="w-3.5 h-3.5" />
-              <span>Nascosti</span>
-            </span>
-          )}
-        </button>
-
-        {showPOILayer && (
-          <div className="bg-slate-900/90 border border-slate-800 px-3 py-2 rounded-xl shadow-xl flex items-center gap-2 text-xs text-slate-300">
-            {isLoadingPOIs ? (
-              <>
-                <Loader2 className="w-3.5 h-3.5 animate-spin text-indigo-400" />
-                <span className="hidden sm:inline">Cerca POI...</span>
-              </>
-            ) : currentZoom >= 12 ? (
-              <>
-                <span className="inline-block w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-                <span className="font-semibold text-emerald-300">{discoveredPOIs.length} POI Cliccabili</span>
-              </>
-            ) : (
-              <span className="text-[11px] text-slate-400 hidden sm:inline">
-                🔍 Zoomma per scoprire POI (Z: {currentZoom}/12)
-              </span>
-            )}
-          </div>
+        {onFitRoute && waypoints.length > 0 && (
+          <button
+            onClick={onFitRoute}
+            className="bg-slate-900/90 hover:bg-slate-800 border border-slate-700/80 px-3 py-2 rounded-xl shadow-xl flex items-center gap-2 text-xs text-slate-200 hover:text-white transition-all cursor-pointer"
+            title="Inquadra tutto l'itinerario sulla mappa"
+          >
+            <Maximize2 className="w-3.5 h-3.5 text-indigo-400" />
+            <span className="font-semibold">Centra Itinerario</span>
+          </button>
         )}
+
+        <div className="bg-slate-900/90 border border-slate-800 px-3 py-2 rounded-xl shadow-xl hidden md:flex items-center gap-2 text-xs text-slate-400">
+          <span className="inline-block w-2 h-2 rounded-full bg-emerald-400"></span>
+          <span>Clicca un punto per aggiungere una tappa</span>
+        </div>
       </div>
 
       <MapContainer
@@ -513,18 +398,15 @@ export const Map: React.FC<MapProps> = ({
         {/* Map Click Handler */}
         <MapEvents onMapClick={handleMapClick} />
 
-        {/* Dynamic POI Discovery in viewport when zoom >= 12 */}
-        <MapPOIDiscoveryController
-          onPOIsLoaded={handlePOIsLoaded}
-          onZoomChange={setCurrentZoom}
-          showPOIs={showPOILayer}
-        />
-
-        {/* Camera auto fit controller */}
+        {/* Camera auto fit controller (Only triggers on fitTrigger change or first mount) */}
         <MapBoundsController
           waypoints={waypoints}
           routeCoordinates={routeData?.coordinates}
+          fitTrigger={fitTrigger}
         />
+
+        {/* Smooth camera pan to selected waypoint */}
+        <MapPanController selectedWaypoint={selectedWaypoint} />
 
         {/* Polyline Route */}
         {routeData && routeData.coordinates.length > 0 && (
@@ -554,53 +436,6 @@ export const Map: React.FC<MapProps> = ({
           </>
         )}
 
-        {/* Discovered Clickable OSM POI Markers (Zoom >= 12) */}
-        {showPOILayer &&
-          currentZoom >= 12 &&
-          discoveredPOIs.map((poi) => (
-            <Marker
-              key={poi.id}
-              position={[poi.lat, poi.lng]}
-              icon={createDiscoveredPOIIcon(poi)}
-            >
-              <Popup className="custom-popup" closeButton={false}>
-                <div
-                  className="p-3.5 min-w-[230px] text-slate-100 space-y-2.5"
-                  onClick={(e) => e.stopPropagation()}
-                  onMouseDown={(e) => e.stopPropagation()}
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-400 flex items-center gap-1">
-                      <Sparkles className="w-3 h-3" />
-                      <span>{poi.categoryLabel}</span>
-                    </span>
-                    <CategoryBadge category={poi.category} />
-                  </div>
-
-                  <div>
-                    <h4 className="font-bold text-sm text-white line-clamp-2">
-                      {poi.name}
-                    </h4>
-                    <div className="text-[11px] text-slate-400 mt-1 font-mono flex items-center gap-1">
-                      <Navigation className="w-3 h-3 text-slate-500" />
-                      <span>{poi.lat.toFixed(4)}°, {poi.lng.toFixed(4)}°</span>
-                    </div>
-                  </div>
-
-                  <div className="pt-2 border-t border-slate-800">
-                    <button
-                      onClick={(e) => handleAddDiscoveredPOI(poi, e)}
-                      className="w-full py-1.5 px-3 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs rounded-lg shadow-md flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
-                    >
-                      <Plus className="w-3.5 h-3.5" />
-                      <span>Aggiungi all'Itinerario</span>
-                    </button>
-                  </div>
-                </div>
-              </Popup>
-            </Marker>
-          ))}
-
         {/* Pending Point Preview Marker with Confirmation Popup */}
         {pendingPoint && (
           <Marker
@@ -610,7 +445,7 @@ export const Map: React.FC<MapProps> = ({
             <Popup
               className="custom-popup"
               closeButton={false}
-              autoPan={true}
+              autoPan={false}
             >
               <div
                 className="p-3.5 min-w-[260px] text-slate-100 space-y-2.5"
@@ -800,7 +635,7 @@ export const Map: React.FC<MapProps> = ({
               position={[waypoint.lat, waypoint.lng]}
               icon={createWaypointIcon(waypoint, index, waypoints.length, isSelected)}
             >
-              <Popup className="custom-popup" closeButton={false}>
+              <Popup className="custom-popup" closeButton={false} autoPan={false}>
                 <div
                   className="p-3.5 min-w-[240px] text-slate-100"
                   onClick={(e) => e.stopPropagation()}
