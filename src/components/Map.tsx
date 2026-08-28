@@ -46,6 +46,7 @@ interface MapProps {
     category?: WaypointCategory;
     stopDurationMin?: number;
   }) => void;
+  onRenameWaypoint?: (id: string, newTitle: string) => void;
   onRemoveWaypoint: (id: string) => void;
   onSelectSearchResult: (result: SearchResult) => void;
   onChangeCategory: (id: string, category: WaypointCategory) => void;
@@ -280,6 +281,7 @@ export const Map: React.FC<MapProps> = ({
   waypoints,
   routeData,
   onAddWaypoint,
+  onRenameWaypoint,
   onRemoveWaypoint,
   onSelectSearchResult,
   onChangeCategory,
@@ -469,25 +471,33 @@ export const Map: React.FC<MapProps> = ({
                   </button>
                 </div>
 
-                {/* Place Name / Address */}
-                <div>
-                  <h4 className="font-bold text-sm text-white flex items-center gap-1.5 line-clamp-1">
-                    {pendingPoint.isLoading ? (
-                      <>
-                        <Loader2 className="w-3.5 h-3.5 animate-spin text-indigo-400" />
-                        <span>Rilevamento località...</span>
-                      </>
-                    ) : (
-                      pendingPoint.title
+                {/* Place Name Input / Address */}
+                <div className="space-y-1">
+                  <label className="text-[10px] uppercase font-bold text-slate-400 flex items-center justify-between">
+                    <span>Nome Tappa:</span>
+                    {pendingPoint.isLoading && (
+                      <span className="text-indigo-400 flex items-center gap-1 normal-case font-normal text-[10px]">
+                        <Loader2 className="w-2.5 h-2.5 animate-spin" /> Rilevamento...
+                      </span>
                     )}
-                  </h4>
+                  </label>
+                  <input
+                    type="text"
+                    value={pendingPoint.title}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setPendingPoint((p) => (p ? { ...p, title: val } : null));
+                    }}
+                    className="w-full bg-slate-900 border border-slate-700/90 rounded-lg px-2.5 py-1.5 text-xs text-white font-semibold focus:ring-1 focus:ring-emerald-400 focus:outline-none placeholder:text-slate-500"
+                    placeholder="Nome tappa..."
+                  />
                   {pendingPoint.address && (
-                    <p className="text-xs text-slate-400 mt-0.5 line-clamp-1">
+                    <p className="text-[11px] text-slate-400 mt-0.5 line-clamp-1">
                       {pendingPoint.address}
                     </p>
                   )}
-                  <div className="text-[11px] text-slate-500 mt-1 font-mono flex items-center gap-1">
-                    <Navigation className="w-3 h-3 text-slate-500" />
+                  <div className="text-[10px] text-slate-500 font-mono flex items-center gap-1">
+                    <Navigation className="w-2.5 h-2.5 text-slate-500" />
                     <span>
                       {pendingPoint.lat.toFixed(4)}°, {pendingPoint.lng.toFixed(4)}°
                     </span>
@@ -649,16 +659,24 @@ export const Map: React.FC<MapProps> = ({
                     <CategoryBadge category={waypoint.category} />
                   </div>
 
-                  <h4 className="font-semibold text-sm text-white line-clamp-1">
-                    {waypoint.title}
-                  </h4>
+                  {/* Waypoint Title with Inline Rename */}
+                  <div className="space-y-1 mb-1.5">
+                    <label className="text-[10px] text-slate-400 font-medium">Nome Tappa:</label>
+                    <input
+                      type="text"
+                      value={waypoint.title}
+                      onChange={(e) => onRenameWaypoint?.(waypoint.id, e.target.value)}
+                      className="w-full bg-slate-900 border border-slate-700/90 rounded-lg px-2 py-1 text-xs text-white font-semibold focus:outline-none focus:ring-1 focus:ring-indigo-400"
+                      placeholder="Nome tappa..."
+                    />
+                  </div>
                   {waypoint.address && (
                     <p className="text-xs text-slate-400 mt-0.5 line-clamp-1">
                       {waypoint.address}
                     </p>
                   )}
 
-                  <div className="text-[11px] text-slate-400 mt-2 font-mono flex items-center gap-1.5">
+                  <div className="text-[11px] text-slate-400 mt-1 font-mono flex items-center gap-1.5">
                     <Navigation className="w-3 h-3 text-slate-500" />
                     <span>
                       {waypoint.lat.toFixed(4)}°, {waypoint.lng.toFixed(4)}°

@@ -271,6 +271,13 @@ export function App() {
     );
   }, []);
 
+  // Rename waypoint title
+  const handleRenameWaypoint = useCallback((id: string, newTitle: string) => {
+    setWaypoints((prev) =>
+      prev.map((w) => (w.id === id ? { ...w, title: newTitle } : w))
+    );
+  }, []);
+
   // Remove waypoint
   const handleRemoveWaypoint = useCallback((id: string) => {
     setWaypoints((prev) => prev.filter((w) => w.id !== id));
@@ -342,6 +349,7 @@ export function App() {
         onSwapDays={handleSwapDays}
         onChangeWaypointDay={handleChangeWaypointDay}
         onDepartureTimeChange={setDepartureTime}
+        onRenameWaypoint={handleRenameWaypoint}
         onRemoveWaypoint={handleRemoveWaypoint}
         onReorderWaypoint={handleReorderWaypoint}
         onChangeCategory={handleChangeCategory}
@@ -360,6 +368,7 @@ export function App() {
           waypoints={waypoints}
           routeData={routeData}
           onAddWaypoint={handleAddWaypoint}
+          onRenameWaypoint={handleRenameWaypoint}
           onRemoveWaypoint={handleRemoveWaypoint}
           onSelectSearchResult={handleSelectSearchResult}
           onChangeCategory={handleChangeCategory}

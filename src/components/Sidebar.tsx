@@ -21,7 +21,6 @@ import {
   AlertCircle,
   Car,
   Flag,
-  Utensils,
   Plus,
   Minus,
   Calendar,
@@ -29,6 +28,9 @@ import {
   AlertTriangle,
   X,
   GripVertical,
+  Pencil,
+  Timer,
+  Route,
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -44,6 +46,7 @@ interface SidebarProps {
   onSwapDays: (dayA: number, dayB: number) => void;
   onChangeWaypointDay: (waypointId: string, newDay: number) => void;
   onDepartureTimeChange: (time: string) => void;
+  onRenameWaypoint?: (id: string, newTitle: string) => void;
   onRemoveWaypoint: (id: string) => void;
   onReorderWaypoint: (index: number, direction: 'up' | 'down') => void;
   onChangeCategory: (id: string, category: WaypointCategory) => void;
@@ -149,6 +152,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onSwapDays,
   onChangeWaypointDay,
   onDepartureTimeChange,
+  onRenameWaypoint,
   onRemoveWaypoint,
   onReorderWaypoint,
   onChangeCategory,
@@ -338,42 +342,47 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
       {/* Minimalist Stats & Schedule Strip */}
       <div className="p-2.5 px-3.5 border-b border-slate-800/80 bg-slate-950/60 space-y-2">
-        {/* Compact Key Stats Row */}
-        <div className="flex items-center justify-between text-slate-300 text-[11px] font-mono">
-          <div className="flex items-center gap-1.5">
-            <Car className="w-3.5 h-3.5 text-indigo-400" />
-            <span className="font-bold text-white text-xs">{hasRoute ? routeData.distanceKm : 0}</span>
-            <span className="text-[10px] text-slate-400">km</span>
+        {/* Compact Key Stats Grid */}
+        <div className="grid grid-cols-4 gap-1 p-2 bg-slate-900/80 border border-slate-800/80 rounded-xl text-center">
+          <div className="flex flex-col items-center justify-center">
+            <span className="text-[10px] text-slate-400 font-medium flex items-center gap-1">
+              <Route className="w-2.5 h-2.5 text-indigo-400" />
+              <span>Distanza</span>
+            </span>
+            <span className="font-mono font-bold text-white text-xs mt-0.5">
+              {hasRoute ? `${routeData.distanceKm} km` : '0 km'}
+            </span>
           </div>
 
-          <div className="text-slate-600">•</div>
-
-          <div className="flex items-center gap-1.5">
-            <Clock className="w-3.5 h-3.5 text-sky-400" />
-            <span className="font-bold text-white text-xs">
+          <div className="flex flex-col items-center justify-center border-l border-slate-800">
+            <span className="text-[10px] text-slate-400 font-medium flex items-center gap-1">
+              <Car className="w-2.5 h-2.5 text-sky-400" />
+              <span>Guida</span>
+            </span>
+            <span className="font-mono font-bold text-sky-300 text-xs mt-0.5">
               {hasRoute ? formatDuration(routeData.durationMinutes) : '0m'}
             </span>
           </div>
 
-          <div className="text-slate-600">•</div>
-
-          <div className="flex items-center gap-1.5">
-            <Utensils className="w-3.5 h-3.5 text-orange-400" />
-            <span className="font-bold text-orange-300 text-xs">
+          <div className="flex flex-col items-center justify-center border-l border-slate-800">
+            <span className="text-[10px] text-slate-400 font-medium flex items-center gap-1">
+              <Timer className="w-2.5 h-2.5 text-amber-400" />
+              <span>Soste</span>
+            </span>
+            <span className="font-mono font-bold text-amber-300 text-xs mt-0.5">
               {formatDuration(totalStopMinutes)}
             </span>
-            <span className="text-[10px] text-slate-400">soste</span>
           </div>
 
-          {hasRoute && (
-            <>
-              <div className="text-slate-600">•</div>
-              <div className="flex items-center gap-1 text-emerald-400 font-bold text-xs">
-                <span>ETA</span>
-                <span>{eta}</span>
-              </div>
-            </>
-          )}
+          <div className="flex flex-col items-center justify-center border-l border-slate-800">
+            <span className="text-[10px] text-slate-400 font-medium flex items-center gap-1">
+              <Flag className="w-2.5 h-2.5 text-emerald-400" />
+              <span>Arrivo</span>
+            </span>
+            <span className="font-mono font-bold text-emerald-400 text-xs mt-0.5">
+              {eta}
+            </span>
+          </div>
         </div>
 
         {/* Minimal Control Bar: Days & Departure Time */}
@@ -724,6 +733,23 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     className="mt-2.5 pt-2 border-t border-slate-800/80 space-y-2"
                     onClick={(e) => e.stopPropagation()}
                   >
+                    {/* Rename Waypoint Title */}
+                    {onRenameWaypoint && (
+                      <div className="space-y-1">
+                        <label className="text-[10px] uppercase font-bold text-slate-400 flex items-center gap-1">
+                          <Pencil className="w-2.5 h-2.5 text-indigo-400" />
+                          <span>Nome Tappa:</span>
+                        </label>
+                        <input
+                          type="text"
+                          value={waypoint.title}
+                          onChange={(e) => onRenameWaypoint(waypoint.id, e.target.value)}
+                          className="w-full bg-slate-900 border border-slate-700/90 rounded-lg px-2 py-1 text-xs text-white font-medium focus:ring-1 focus:ring-indigo-500 focus:outline-none"
+                          placeholder="Inserisci nome tappa..."
+                        />
+                      </div>
+                    )}
+
                     {/* Day selector & Reorder / Delete toolbar */}
                     <div className="flex items-center justify-between text-[11px]">
                       {/* Day Assignment */}
