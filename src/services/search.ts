@@ -93,21 +93,58 @@ function mapOSMToCategory(item: {
   return { category: 'standard', categoryLabel: 'Località' };
 }
 
-export async function searchPlaces(query: string): Promise<SearchResult[]> {
+// Calculate Haversine distance in kilometers between two coordinates
+export function calculateDistanceKm(
+  lat1: number,
+  lon1: number,
+  lat2: number,
+  lon2: number
+): number {
+  const R = 6371; // Earth radius in km
+  const dLat = (lat2 - lat1) * (Math.PI / 180);
+  const dLon = (lon2 - lon1) * (Math.PI / 180);
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * (Math.PI / 180)) *
+      Math.cos(lat2 * (Math.PI / 180)) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
+
+export function formatDistanceKm(distanceKm: number): string {
+  if (distanceKm < 1) {
+    return `${Math.round(distanceKm * 1000)} m`;
+  }
+  if (distanceKm < 10) {
+    return `${distanceKm.toFixed(1)} km`;
+  }
+  return `${Math.round(distanceKm)} km`;
+}
+
+export async function searchPlaces(
+  query: string,
+  proximity?: { lat: number; lng: number } | null
+): Promise<SearchResult[]> {
   const trimmed = query.trim();
   if (trimmed.length < 2) return [];
 
-  // Use Photon API (Komoot OpenStreetMap search) for ultra-fast POI & natural features search
+  // Use Photon API (Komoot OpenStreetMap search) with proximity biasing
   try {
-    const photonUrl = `https://photon.komoot.io/api/?q=${encodeURIComponent(
+    let photonUrl = `https://photon.komoot.io/api/?q=${encodeURIComponent(
       trimmed
-    )}&limit=7&lang=it`;
+    )}&limit=10&lang=it`;
+
+    if (proximity) {
+      photonUrl += `&lat=${proximity.lat}&lon=${proximity.lng}`;
+    }
 
     const res = await fetch(photonUrl);
     if (res.ok) {
       const data = await res.json();
       if (data.features && data.features.length > 0) {
-        return data.features.map(
+        const results: SearchResult[] = data.features.map(
           (
             f: {
               geometry: { coordinates: [number, number] };
@@ -141,6 +178,10 @@ export async function searchPlaces(query: string): Promise<SearchResult[]> {
               type: props.type,
             });
 
+            const distanceKm = proximity
+              ? calculateDistanceKm(proximity.lat, proximity.lng, lat, lng)
+              : undefined;
+
             return {
               id: `search-${props.osm_id || index}-${Date.now()}`,
               name,
@@ -150,9 +191,17 @@ export async function searchPlaces(query: string): Promise<SearchResult[]> {
               category,
               categoryLabel,
               rawType: props.osm_value || props.type,
+              distanceKm,
+              distanceText: distanceKm !== undefined ? formatDistanceKm(distanceKm) : undefined,
             };
           }
         );
+
+        if (proximity) {
+          results.sort((a, b) => (a.distanceKm ?? 99999) - (b.distanceKm ?? 99999));
+        }
+
+        return results;
       }
     }
   } catch {
@@ -161,9 +210,18 @@ export async function searchPlaces(query: string): Promise<SearchResult[]> {
 
   // Fallback to Nominatim
   try {
-    const nominatimUrl = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(
+    let nominatimUrl = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(
       trimmed
-    )}&format=jsonv2&addressdetails=1&namedetails=1&extratags=1&accept-language=it,en,en-US&limit=7`;
+    )}&format=jsonv2&addressdetails=1&namedetails=1&extratags=1&accept-language=it,en,en-US&limit=10`;
+
+    if (proximity) {
+      const viewboxDelta = 1.0;
+      const minLon = proximity.lng - viewboxDelta;
+      const maxLon = proximity.lng + viewboxDelta;
+      const minLat = proximity.lat - viewboxDelta;
+      const maxLat = proximity.lat + viewboxDelta;
+      nominatimUrl += `&viewbox=${minLon},${maxLat},${maxLon},${minLat}&bounded=0`;
+    }
 
     const res = await fetch(nominatimUrl, {
       headers: { 'Accept-Language': 'it,en;q=0.9,en-US;q=0.8' },
@@ -171,7 +229,7 @@ export async function searchPlaces(query: string): Promise<SearchResult[]> {
     if (!res.ok) return [];
 
     const items = await res.json();
-    return items.map(
+    const results: SearchResult[] = items.map(
       (
         item: {
           place_id: number;
@@ -208,18 +266,32 @@ export async function searchPlaces(query: string): Promise<SearchResult[]> {
           type: item.type,
         });
 
+        const lat = parseFloat(item.lat);
+        const lng = parseFloat(item.lon);
+        const distanceKm = proximity
+          ? calculateDistanceKm(proximity.lat, proximity.lng, lat, lng)
+          : undefined;
+
         return {
           id: `nom-${item.place_id || index}`,
           name,
           displayName,
-          lat: parseFloat(item.lat),
-          lng: parseFloat(item.lon),
+          lat,
+          lng,
           category,
           categoryLabel,
           rawType: item.type,
+          distanceKm,
+          distanceText: distanceKm !== undefined ? formatDistanceKm(distanceKm) : undefined,
         };
       }
     );
+
+    if (proximity) {
+      results.sort((a, b) => (a.distanceKm ?? 99999) - (b.distanceKm ?? 99999));
+    }
+
+    return results;
   } catch {
     return [];
   }

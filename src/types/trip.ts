@@ -49,4 +49,6 @@ export interface SearchResult {
   category: WaypointCategory;
   categoryLabel: string;
   rawType?: string;
+  distanceKm?: number;
+  distanceText?: string;
 }

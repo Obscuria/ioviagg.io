@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useRef } from 'react';
+import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import {
   MapContainer,
   TileLayer,
@@ -380,6 +380,26 @@ export const Map: React.FC<MapProps> = ({
 
   const selectedWaypoint = waypoints.find((w) => w.id === selectedWaypointId);
 
+  // Proximity reference location for smart POI and place search
+  const proximityLocation = useMemo(() => {
+    if (selectedWaypoint) {
+      return {
+        lat: selectedWaypoint.lat,
+        lng: selectedWaypoint.lng,
+        label: selectedWaypoint.title,
+      };
+    }
+    if (waypoints.length > 0) {
+      const lastWp = waypoints[waypoints.length - 1];
+      return {
+        lat: lastWp.lat,
+        lng: lastWp.lng,
+        label: lastWp.title,
+      };
+    }
+    return null;
+  }, [selectedWaypoint, waypoints]);
+
   // Handle map click: initiate pending point with preview & confirmation popup
   const handleMapClick = useCallback(async (coords: { lat: number; lng: number }) => {
     setPendingPoint({
@@ -441,7 +461,10 @@ export const Map: React.FC<MapProps> = ({
     <div className="relative w-full h-full bg-slate-950 overflow-hidden select-none">
       {/* Floating Top Search Bar */}
       <div className="absolute top-4 left-4 z-[400] max-w-sm sm:max-w-md w-full">
-        <SearchBar onSelectPlace={onSelectSearchResult} />
+        <SearchBar
+          onSelectPlace={onSelectSearchResult}
+          proximityLocation={proximityLocation}
+        />
       </div>
 
       {/* Floating Action Controls */}

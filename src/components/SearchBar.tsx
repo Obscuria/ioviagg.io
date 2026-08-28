@@ -12,10 +12,12 @@ import {
   Sparkles,
   Plus,
   Utensils,
+  Navigation,
 } from 'lucide-react';
 
 interface SearchBarProps {
   onSelectPlace: (result: SearchResult) => void;
+  proximityLocation?: { lat: number; lng: number; label?: string } | null;
 }
 
 // Utility to render the corresponding icon for a category
@@ -86,7 +88,10 @@ export function CategoryBadge({
   }
 }
 
-export const SearchBar: React.FC<SearchBarProps> = ({ onSelectPlace }) => {
+export const SearchBar: React.FC<SearchBarProps> = ({
+  onSelectPlace,
+  proximityLocation,
+}) => {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<SearchResult[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -94,7 +99,7 @@ export const SearchBar: React.FC<SearchBarProps> = ({ onSelectPlace }) => {
   const [selectedIndex, setSelectedIndex] = useState(-1);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Debounced search
+  // Debounced search with proximity biasing
   useEffect(() => {
     if (query.trim().length < 2) {
       setResults([]);
@@ -104,7 +109,7 @@ export const SearchBar: React.FC<SearchBarProps> = ({ onSelectPlace }) => {
 
     setIsLoading(true);
     const timer = setTimeout(async () => {
-      const places = await searchPlaces(query);
+      const places = await searchPlaces(query, proximityLocation);
       setResults(places);
       setIsLoading(false);
       setIsOpen(true);
@@ -112,7 +117,7 @@ export const SearchBar: React.FC<SearchBarProps> = ({ onSelectPlace }) => {
     }, 280);
 
     return () => clearTimeout(timer);
-  }, [query]);
+  }, [query, proximityLocation]);
 
   // Click outside listener
   useEffect(() => {
@@ -172,7 +177,11 @@ export const SearchBar: React.FC<SearchBarProps> = ({ onSelectPlace }) => {
             if (results.length > 0) setIsOpen(true);
           }}
           onKeyDown={handleKeyDown}
-          placeholder="Cerca qualsiasi POI, monte, parco, parcheggio o città..."
+          placeholder={
+            proximityLocation
+              ? `Cerca vicino a ${proximityLocation.label || 'tappa precedente'}...`
+              : 'Cerca qualsiasi POI, monte, parco, ristorante o città...'
+          }
           className="w-full bg-transparent py-2.5 pr-8 text-xs text-white placeholder-slate-400 focus:outline-none"
         />
 
@@ -183,7 +192,7 @@ export const SearchBar: React.FC<SearchBarProps> = ({ onSelectPlace }) => {
               setResults([]);
               setIsOpen(false);
             }}
-            className="absolute right-2.5 p-1 text-slate-400 hover:text-white hover:bg-slate-800 rounded-full transition-colors"
+            className="absolute right-2.5 p-1 text-slate-400 hover:text-white hover:bg-slate-800 rounded-full transition-colors cursor-pointer"
           >
             <X className="w-3.5 h-3.5" />
           </button>
@@ -192,12 +201,21 @@ export const SearchBar: React.FC<SearchBarProps> = ({ onSelectPlace }) => {
 
       {/* Autocomplete Dropdown */}
       {isOpen && (results.length > 0 || isLoading) && (
-        <div className="absolute top-full mt-2 left-0 right-0 bg-slate-900/95 backdrop-blur-xl border border-slate-700/80 rounded-2xl shadow-2xl overflow-hidden z-[500] max-h-[340px] overflow-y-auto">
+        <div className="absolute top-full mt-2 left-0 right-0 bg-slate-900/95 backdrop-blur-xl border border-slate-700/80 rounded-2xl shadow-2xl overflow-hidden z-[500] max-h-[360px] overflow-y-auto">
           {results.length > 0 ? (
             <div className="p-1.5 space-y-1">
               <div className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-400 border-b border-slate-800 flex items-center justify-between">
-                <span>Risultati Trovati ({results.length})</span>
-                <span>Seleziona per aggiungere</span>
+                {proximityLocation ? (
+                  <span className="flex items-center gap-1 text-emerald-400 truncate max-w-[240px]">
+                    <Navigation className="w-3 h-3 shrink-0" />
+                    <span className="truncate">
+                      Ordinati da: <strong className="text-white normal-case">{proximityLocation.label}</strong>
+                    </span>
+                  </span>
+                ) : (
+                  <span>Risultati ({results.length})</span>
+                )}
+                <span className="text-slate-500 shrink-0">Click per aggiungere</span>
               </div>
 
               {results.map((place, idx) => {
@@ -207,9 +225,9 @@ export const SearchBar: React.FC<SearchBarProps> = ({ onSelectPlace }) => {
                     key={place.id}
                     onClick={() => handleSelect(place)}
                     onMouseEnter={() => setSelectedIndex(idx)}
-                    className={`w-full text-left p-2.5 rounded-xl transition-all flex items-start gap-3 group ${
+                    className={`w-full text-left p-2.5 rounded-xl transition-all flex items-start gap-2.5 group cursor-pointer ${
                       isSelected
-                        ? 'bg-indigo-600/20 border border-indigo-500/40 text-white'
+                        ? 'bg-indigo-600/20 border border-indigo-500/40 text-white shadow-sm'
                         : 'hover:bg-slate-800/70 border border-transparent text-slate-200'
                     }`}
                   >
@@ -220,11 +238,19 @@ export const SearchBar: React.FC<SearchBarProps> = ({ onSelectPlace }) => {
 
                     {/* Information */}
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center justify-between gap-1.5">
                         <h4 className="text-xs font-semibold truncate text-white">
                           {place.name}
                         </h4>
-                        <CategoryBadge category={place.category} label={place.categoryLabel} />
+                        <div className="flex items-center gap-1 shrink-0">
+                          {place.distanceText && (
+                            <span className="inline-flex items-center gap-0.5 text-[9px] font-mono text-emerald-300 bg-emerald-500/15 border border-emerald-500/30 px-1.5 py-0.2 rounded-full">
+                              <Navigation className="w-2.5 h-2.5 text-emerald-400" />
+                              <span>{place.distanceText}</span>
+                            </span>
+                          )}
+                          <CategoryBadge category={place.category} label={place.categoryLabel} />
+                        </div>
                       </div>
 
                       <p className="text-[11px] text-slate-400 truncate mt-0.5">
@@ -233,7 +259,7 @@ export const SearchBar: React.FC<SearchBarProps> = ({ onSelectPlace }) => {
                     </div>
 
                     {/* Add action indicator */}
-                    <div className="opacity-0 group-hover:opacity-100 self-center text-indigo-400 p-1">
+                    <div className="opacity-0 group-hover:opacity-100 self-center text-indigo-400 p-1 shrink-0">
                       <Plus className="w-4 h-4" />
                     </div>
                   </button>
