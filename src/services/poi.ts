@@ -2,7 +2,7 @@ import type { WaypointCategory } from '../types/trip';
 
 export interface MapPOI {
   id: string;
-  osmId: number;
+  osmId?: number | string;
   name: string;
   lat: number;
   lng: number;
@@ -22,198 +22,170 @@ export interface MapBounds {
 
 const poiCache = new Map<string, MapPOI[]>();
 
-// Classify OSM tags into our WaypointCategory
-export function classifyOsmTags(tags: Record<string, string>): {
+// Classify raw OSM type / class / amenity / tourism tags into clean categories
+export function classifyPOIType(rawType: string = '', rawClass: string = ''): {
   category: WaypointCategory;
   categoryLabel: string;
   icon: string;
-  type: string;
 } {
-  const amenity = (tags.amenity || '').toLowerCase();
-  const tourism = (tags.tourism || '').toLowerCase();
-  const historic = (tags.historic || '').toLowerCase();
-  const natural = (tags.natural || '').toLowerCase();
-  const leisure = (tags.leisure || '').toLowerCase();
+  const t = rawType.toLowerCase();
+  const c = rawClass.toLowerCase();
 
   // Food & Dining
-  if (['restaurant', 'cafe', 'bar', 'pub', 'fast_food', 'bistro', 'ice_cream', 'food_court', 'biergarten'].includes(amenity)) {
-    let label = 'Ristorante / Cibo';
-    let icon = '🍽️';
-    if (['cafe', 'bar', 'pub'].includes(amenity)) {
-      label = 'Bar / Caffetteria';
-      icon = '☕';
-    } else if (amenity === 'ice_cream') {
-      label = 'Gelateria';
-      icon = '🍦';
-    } else if (amenity === 'fast_food') {
-      label = 'Fast Food';
-      icon = '🍔';
-    }
-    return { category: 'food', categoryLabel: label, icon, type: amenity };
+  if (
+    ['restaurant', 'cafe', 'bar', 'pub', 'fast_food', 'bistro', 'ice_cream', 'food_court', 'biergarten', 'bakery', 'pizzeria', 'trattoria', 'osteria'].includes(t) ||
+    c === 'amenity' && ['restaurant', 'cafe', 'bar', 'fast_food', 'pub'].includes(t)
+  ) {
+    if (['cafe', 'bar', 'pub'].includes(t)) return { category: 'food', categoryLabel: 'Bar / Caffetteria', icon: '☕' };
+    if (t === 'ice_cream') return { category: 'food', categoryLabel: 'Gelateria', icon: '🍦' };
+    if (t === 'fast_food') return { category: 'food', categoryLabel: 'Fast Food', icon: '🍔' };
+    return { category: 'food', categoryLabel: 'Ristorante / Ristoro', icon: '🍽️' };
   }
 
   // Parking
-  if (amenity === 'parking' || tags.parking) {
-    return { category: 'parking', categoryLabel: 'Parcheggio', icon: '🅿️', type: 'parking' };
+  if (t.includes('parking') || c.includes('parking')) {
+    return { category: 'parking', categoryLabel: 'Parcheggio', icon: '🅿️' };
   }
 
   // Overnight stay
-  if (['hotel', 'guest_house', 'hostel', 'motel', 'camp_site', 'caravan_site', 'chalet', 'apartment', 'resort', 'alpine_hut'].includes(tourism)) {
-    let label = 'Pernottamento / Hotel';
-    let icon = '🛏️';
-    if (['camp_site', 'caravan_site'].includes(tourism)) {
-      label = 'Campeggio / Sosta Camper';
-      icon = '⛺';
-    } else if (tourism === 'alpine_hut') {
-      label = 'Rifugio Alpino';
-      icon = '🏡';
-    }
-    return { category: 'stay', categoryLabel: label, icon, type: tourism };
+  if (
+    ['hotel', 'guest_house', 'hostel', 'motel', 'camp_site', 'caravan_site', 'chalet', 'apartment', 'resort', 'alpine_hut', 'bed_and_breakfast'].includes(t) ||
+    c === 'tourism' && ['hotel', 'guest_house', 'hostel', 'motel', 'camp_site', 'chalet', 'alpine_hut'].includes(t)
+  ) {
+    if (['camp_site', 'caravan_site'].includes(t)) return { category: 'stay', categoryLabel: 'Campeggio', icon: '⛺' };
+    if (t === 'alpine_hut') return { category: 'stay', categoryLabel: 'Rifugio Alpino', icon: '🏡' };
+    return { category: 'stay', categoryLabel: 'Pernottamento / Hotel', icon: '🛏️' };
   }
 
-  // Historic / Cultural POI
-  if (historic) {
-    let label = 'Sito Storico';
-    let icon = '🏛️';
-    if (historic === 'castle') {
-      label = 'Castello / Rocca';
-      icon = '🏰';
-    } else if (historic === 'monument' || historic === 'memorial') {
-      label = 'Monumento';
-      icon = '🗿';
-    } else if (historic === 'ruins' || historic === 'archaeological_site') {
-      label = 'Rovine / Sito Archeologico';
-      icon = '🏺';
-    }
-    return { category: 'poi', categoryLabel: label, icon, type: historic };
+  // Historic / Monument / Tower / Castle
+  if (
+    ['monument', 'memorial', 'tower', 'castle', 'ruins', 'archaeological_site', 'fort', 'city_gate', 'historic'].includes(t) ||
+    c === 'historic'
+  ) {
+    if (t === 'tower' || t.includes('tower')) return { category: 'poi', categoryLabel: 'Torre / Monumento', icon: '🗼' };
+    if (t === 'castle' || t.includes('castle')) return { category: 'poi', categoryLabel: 'Castello / Fortezza', icon: '🏰' };
+    if (t === 'museum') return { category: 'poi', categoryLabel: 'Museo', icon: '🏛️' };
+    return { category: 'poi', categoryLabel: 'Monumento Storico', icon: '🏛️' };
   }
 
-  // Nature / Peaks / Viewpoints
-  if (['peak', 'volcano', 'cliff', 'rock', 'waterfall', 'beach', 'cave_entrance'].includes(natural)) {
-    let label = 'Punto Panoramico / Natura';
-    let icon = '🏔️';
-    if (natural === 'peak') label = 'Vetta / Cima';
-    else if (natural === 'waterfall') {
-      label = 'Cascata';
-      icon = '🌊';
-    } else if (natural === 'beach') {
-      label = 'Spiaggia';
-      icon = '🏖️';
-    }
-    return { category: 'poi', categoryLabel: label, icon, type: natural };
+  // Nature / Viewpoint / Peaks
+  if (['viewpoint', 'peak', 'volcano', 'cliff', 'rock', 'waterfall', 'beach', 'cave_entrance'].includes(t) || c === 'natural') {
+    if (t === 'viewpoint') return { category: 'poi', categoryLabel: 'Punto Panoramico', icon: '🔭' };
+    if (t === 'peak') return { category: 'poi', categoryLabel: 'Vetta / Cima', icon: '🏔️' };
+    if (t === 'waterfall') return { category: 'poi', categoryLabel: 'Cascata', icon: '🌊' };
+    if (t === 'beach') return { category: 'poi', categoryLabel: 'Spiaggia', icon: '🏖️' };
+    return { category: 'poi', categoryLabel: 'Punto Panoramico / Natura', icon: '🏔️' };
   }
 
   // Tourism & Attractions
-  if (['attraction', 'viewpoint', 'museum', 'theme_park', 'gallery', 'artwork'].includes(tourism)) {
-    let label = 'Punto di Interesse';
-    let icon = '📸';
-    if (tourism === 'viewpoint') {
-      label = 'Belvedere / Vista Panoramica';
-      icon = '🔭';
-    } else if (tourism === 'museum') {
-      label = 'Museo';
-      icon = '🏛️';
-    }
-    return { category: 'poi', categoryLabel: label, icon, type: tourism };
+  if (['attraction', 'museum', 'theme_park', 'artwork', 'gallery', 'park', 'nature_reserve'].includes(t) || c === 'tourism' || c === 'leisure') {
+    if (t === 'museum') return { category: 'poi', categoryLabel: 'Museo', icon: '🏛️' };
+    if (t.includes('park')) return { category: 'poi', categoryLabel: 'Parco / Giardino', icon: '🌲' };
+    return { category: 'poi', categoryLabel: 'Attrazione Turistica', icon: '📸' };
   }
 
-  // Leisure / Parks
-  if (['park', 'nature_reserve'].includes(leisure)) {
-    return { category: 'poi', categoryLabel: 'Parco Naturale', icon: '🌲', type: leisure };
-  }
-
-  return { category: 'standard', categoryLabel: 'Punto d\'Interesse', icon: '📍', type: 'point' };
+  return { category: 'standard', categoryLabel: 'Punto di Interesse', icon: '📍' };
 }
 
-// Fetch POIs in map bounds via Overpass API
+// Fetch POIs in map bounds using fast Nominatim multi-category query
 export async function fetchPOIsInBounds(bounds: MapBounds, maxResults: number = 40): Promise<MapPOI[]> {
-  // Round coordinates to ~100m grid for caching
+  // Quantize bounds to avoid re-fetching on minor drags
   const cacheKey = `${bounds.south.toFixed(3)},${bounds.west.toFixed(3)},${bounds.north.toFixed(3)},${bounds.east.toFixed(3)}`;
   if (poiCache.has(cacheKey)) {
     return poiCache.get(cacheKey)!;
   }
 
-  // Keep bounding box reasonably sized
+  // Prevent enormous bounding box queries
   const latDiff = Math.abs(bounds.north - bounds.south);
   const lngDiff = Math.abs(bounds.east - bounds.west);
-  if (latDiff > 0.4 || lngDiff > 0.4) {
-    // Area too large to query individual POIs, return empty
+  if (latDiff > 0.6 || lngDiff > 0.6) {
     return [];
   }
 
-  const query = `
-    [out:json][timeout:6];
-    (
-      node["amenity"~"restaurant|cafe|bar|pub|fast_food|parking"](${bounds.south},${bounds.west},${bounds.north},${bounds.east});
-      node["tourism"~"attraction|viewpoint|museum|hotel|guest_house|hostel|camp_site|chalet|alpine_hut"](${bounds.south},${bounds.west},${bounds.north},${bounds.east});
-      node["historic"~"castle|monument|ruins|archaeological_site|memorial"](${bounds.south},${bounds.west},${bounds.north},${bounds.east});
-      node["natural"~"peak|waterfall|beach|viewpoint"](${bounds.south},${bounds.west},${bounds.north},${bounds.east});
-    );
-    out body ${maxResults};
-  `;
-
-  const endpoints = [
-    'https://overpass-api.de/api/interpreter',
-    'https://lz4.overpass-api.de/api/interpreter',
-    'https://overpass.kumi.systems/api/interpreter',
+  // Queries to cover all key categories (Attractions, Monuments, Towers, Food, Parkings, Hotels)
+  const targetTerms = [
+    'attrazione',
+    'monumento',
+    'torre',
+    'museo',
+    'chiesa',
+    'ristorante',
+    'trattoria',
+    'pasticceria',
+    'bar',
+    'parcheggio',
+    'hotel',
   ];
 
-  for (const endpoint of endpoints) {
-    try {
+  const viewboxParam = `${bounds.west.toFixed(5)},${bounds.north.toFixed(5)},${bounds.east.toFixed(5)},${bounds.south.toFixed(5)}`;
+
+  try {
+    const fetchPromises = targetTerms.map(async (term) => {
+      const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(
+        term
+      )}&format=jsonv2&viewbox=${viewboxParam}&bounded=1&limit=8`;
+
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 6000);
+      const timeoutId = setTimeout(() => controller.abort(), 4000);
 
-      const res = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: `data=${encodeURIComponent(query)}`,
-        signal: controller.signal,
-      });
-
-      clearTimeout(timeoutId);
-
-      if (!res.ok) continue;
-
-      const data = await res.json();
-      if (!data.elements || !Array.isArray(data.elements)) continue;
-
-      const pois: MapPOI[] = [];
-      const seenNames = new Set<string>();
-
-      for (const el of data.elements) {
-        if (!el.lat || !el.lon || !el.tags) continue;
-        const name = el.tags.name || el.tags['name:it'] || el.tags['name:en'];
-        if (!name || name.trim().length === 0) continue;
-
-        // Avoid exact duplicate names overlapping at same position
-        const key = `${name.toLowerCase()}-${el.lat.toFixed(3)}-${el.lon.toFixed(3)}`;
-        if (seenNames.has(key)) continue;
-        seenNames.add(key);
-
-        const { category, categoryLabel, icon, type } = classifyOsmTags(el.tags);
-
-        pois.push({
-          id: `poi-osm-${el.id}`,
-          osmId: el.id,
-          name: name.trim(),
-          lat: el.lat,
-          lng: el.lon,
-          category,
-          categoryLabel,
-          type,
-          icon,
+      try {
+        const res = await fetch(url, {
+          headers: { 'User-Agent': 'IoViaggioTravelPlanner/1.0' },
+          signal: controller.signal,
         });
+        clearTimeout(timeoutId);
+        if (!res.ok) return [];
+        return await res.json();
+      } catch {
+        clearTimeout(timeoutId);
+        return [];
+      }
+    });
 
-        if (pois.length >= maxResults) break;
+    const results = await Promise.all(fetchPromises);
+    const flat = results.flat();
+
+    const seenKeys = new Set<string>();
+    const pois: MapPOI[] = [];
+
+    for (const item of flat) {
+      if (!item.lat || !item.lon) continue;
+      const rawName = item.name || (item.display_name && item.display_name.split(',')[0].trim());
+      if (!rawName || rawName.length < 2) continue;
+
+      const lat = parseFloat(item.lat);
+      const lng = parseFloat(item.lon);
+
+      // Verify coordinate is actually inside current bounding box
+      if (lat < bounds.south || lat > bounds.north || lng < bounds.west || lng > bounds.east) {
+        continue;
       }
 
-      poiCache.set(cacheKey, pois);
-      return pois;
-    } catch {
-      // Try next endpoint on failure
-      continue;
-    }
-  }
+      // Deduplicate nearby items with same name
+      const key = `${rawName.toLowerCase()}-${lat.toFixed(3)}-${lng.toFixed(3)}`;
+      if (seenKeys.has(key)) continue;
+      seenKeys.add(key);
 
-  return [];
+      const { category, categoryLabel, icon } = classifyPOIType(item.type, item.class);
+
+      pois.push({
+        id: `poi-nom-${item.place_id || Math.random().toString(36).substr(2, 6)}`,
+        osmId: item.osm_id || item.place_id,
+        name: rawName,
+        lat,
+        lng,
+        category,
+        categoryLabel,
+        type: item.type || item.class || 'point',
+        icon,
+      });
+
+      if (pois.length >= maxResults) break;
+    }
+
+    poiCache.set(cacheKey, pois);
+    return pois;
+  } catch {
+    return [];
+  }
 }

@@ -9,10 +9,22 @@
   font-family: inherit;
 }
 
-/* Reset default leaflet div icon styling */
-.leaflet-div-icon {
+/* Reset default leaflet div icon styling & remove rectangular outlines */
+.leaflet-div-icon,
+.custom-leaflet-marker,
+.pending-leaflet-marker,
+.leaflet-marker-icon {
   background: transparent !important;
   border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+.leaflet-marker-icon:focus,
+.leaflet-marker-icon:focus-visible,
+.leaflet-container :focus,
+.leaflet-container :focus-visible {
+  outline: none !important;
 }
 
 /* Custom Marker Pin Styling & Anchoring */

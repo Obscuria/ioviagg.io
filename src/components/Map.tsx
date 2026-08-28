@@ -201,11 +201,11 @@ function createWaypointIcon(
     }
   }
 
-  const selectedClass = isSelected ? 'scale-110 ring-4 ring-white shadow-2xl' : '';
+  const selectedCircleStyle = isSelected ? '!ring-4 !ring-white shadow-2xl scale-110' : '';
 
   const html = `
-    <div class="custom-waypoint-pin cursor-pointer ${selectedClass}">
-      <div class="relative flex items-center justify-center w-8 h-8 rounded-full bg-gradient-to-tr ${bgGradient} text-white font-bold text-xs shadow-xl border-2 ${ringColor} ring-4 transition-all duration-150">
+    <div class="custom-waypoint-pin cursor-pointer">
+      <div class="relative flex items-center justify-center w-8 h-8 rounded-full bg-gradient-to-tr ${bgGradient} text-white font-bold text-xs shadow-xl border-2 ${ringColor} ring-4 transition-all duration-150 ${selectedCircleStyle}">
         <span class="leading-none select-none">${badgeContent}</span>
       </div>
       <div class="-mt-1 w-2.5 h-2.5 ${pointerBg} rotate-45 border-r border-b border-white/60"></div>
@@ -282,7 +282,7 @@ function createDiscoveredPOIIcon(poi: MapPOI) {
   });
 }
 
-// Interactive Map POIs Discovery Component (Fetches when zoom >= 13)
+// Interactive Map POIs Discovery Component (Fetches when zoom >= 12)
 function MapPOIDiscoveryController({
   onPOIsLoaded,
   onZoomChange,
@@ -299,7 +299,7 @@ function MapPOIDiscoveryController({
     const zoom = map.getZoom();
     onZoomChange(zoom);
 
-    if (!showPOIs || zoom < 13) {
+    if (!showPOIs || zoom < 12) {
       onPOIsLoaded([], false);
       return;
     }
@@ -315,7 +315,7 @@ function MapPOIDiscoveryController({
     };
 
     try {
-      const results = await fetchPOIsInBounds(bounds, 45);
+      const results = await fetchPOIsInBounds(bounds, 50);
       onPOIsLoaded(results, false);
     } catch {
       onPOIsLoaded([], false);
@@ -324,11 +324,11 @@ function MapPOIDiscoveryController({
 
   useEffect(() => {
     if (fetchTimeoutRef.current) clearTimeout(fetchTimeoutRef.current);
-    fetchTimeoutRef.current = setTimeout(fetchCurrentBounds, 350);
+    fetchTimeoutRef.current = setTimeout(fetchCurrentBounds, 300);
 
     const onMoveEnd = () => {
       if (fetchTimeoutRef.current) clearTimeout(fetchTimeoutRef.current);
-      fetchTimeoutRef.current = setTimeout(fetchCurrentBounds, 400);
+      fetchTimeoutRef.current = setTimeout(fetchCurrentBounds, 350);
     };
 
     map.on('moveend', onMoveEnd);
@@ -478,16 +478,16 @@ export const Map: React.FC<MapProps> = ({
             {isLoadingPOIs ? (
               <>
                 <Loader2 className="w-3.5 h-3.5 animate-spin text-indigo-400" />
-                <span className="hidden sm:inline">Caricamento POI...</span>
+                <span className="hidden sm:inline">Cerca POI...</span>
               </>
-            ) : currentZoom >= 13 ? (
+            ) : currentZoom >= 12 ? (
               <>
                 <span className="inline-block w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
                 <span className="font-semibold text-emerald-300">{discoveredPOIs.length} POI Cliccabili</span>
               </>
             ) : (
               <span className="text-[11px] text-slate-400 hidden sm:inline">
-                🔍 Zoomma per scoprire POI (Z: {currentZoom}/13)
+                🔍 Zoomma per scoprire POI (Z: {currentZoom}/12)
               </span>
             )}
           </div>
@@ -513,7 +513,7 @@ export const Map: React.FC<MapProps> = ({
         {/* Map Click Handler */}
         <MapEvents onMapClick={handleMapClick} />
 
-        {/* Dynamic POI Discovery in viewport when zoom >= 13 */}
+        {/* Dynamic POI Discovery in viewport when zoom >= 12 */}
         <MapPOIDiscoveryController
           onPOIsLoaded={handlePOIsLoaded}
           onZoomChange={setCurrentZoom}
@@ -554,9 +554,9 @@ export const Map: React.FC<MapProps> = ({
           </>
         )}
 
-        {/* Discovered Clickable OSM POI Markers (Zoom >= 13) */}
+        {/* Discovered Clickable OSM POI Markers (Zoom >= 12) */}
         {showPOILayer &&
-          currentZoom >= 13 &&
+          currentZoom >= 12 &&
           discoveredPOIs.map((poi) => (
             <Marker
               key={poi.id}
