@@ -31,11 +31,22 @@ export function App() {
   });
 
   const [routeData, setRouteData] = useState<RouteData | null>(null);
-  const [departureTime, setDepartureTime] = useState<string>('09:00');
+  const [dayDepartureTimes, setDayDepartureTimes] = useState<Record<number, string>>({
+    1: '09:00',
+    2: '09:00',
+    3: '09:00',
+  });
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedWaypointId, setSelectedWaypointId] = useState<string | null>(null);
   const [fitTrigger, setFitTrigger] = useState<number>(0);
+
+  const handleSetDayDepartureTime = useCallback((day: number, time: string) => {
+    setDayDepartureTimes((prev) => ({
+      ...prev,
+      [day]: time,
+    }));
+  }, []);
 
   const handleFitRoute = useCallback(() => {
     setFitTrigger((prev) => prev + 1);
@@ -60,7 +71,7 @@ export function App() {
       if (err instanceof Error) {
         setError(err.message);
       } else {
-        setError('Impossibile calcolare il percorso stradale.');
+        setError('Impossibile calcolare il percorso. Verifica la connessione.');
       }
       setRouteData(null);
     } finally {
@@ -72,9 +83,13 @@ export function App() {
     calculateRoute(waypoints);
   }, [waypoints, calculateRoute]);
 
-  // Add day
+  // Add a new day to the trip
   const handleAddDay = useCallback(() => {
-    setTotalDays((prev) => prev + 1);
+    setTotalDays((prev) => {
+      const nextDay = prev + 1;
+      setDayDepartureTimes((times) => ({ ...times, [nextDay]: '09:00' }));
+      return nextDay;
+    });
   }, []);
 
   // Force set total days (used when user types or confirms changes)
@@ -100,13 +115,24 @@ export function App() {
         });
     });
 
+    setDayDepartureTimes((prev) => {
+      const nextTimes: Record<number, string> = {};
+      let nextDayIdx = 1;
+      for (let d = 1; d <= totalDays; d++) {
+        if (d === dayToRemove) continue;
+        nextTimes[nextDayIdx] = prev[d] || '09:00';
+        nextDayIdx++;
+      }
+      return nextTimes;
+    });
+
     setTotalDays((prev) => Math.max(1, prev - 1));
     setActiveDayTab((prev) => {
       if (prev === dayToRemove) return null;
       if (prev && prev > dayToRemove) return prev - 1;
       return prev;
     });
-  }, []);
+  }, [totalDays]);
 
   // Swap two days (e.g. Day 1 with Day 3) and maintain focus on the swapped day
   const handleSwapDays = useCallback((dayA: number, dayB: number) => {
@@ -119,6 +145,16 @@ export function App() {
         return w;
       })
     );
+
+    setDayDepartureTimes((prev) => {
+      const timeA = prev[dayA] || '09:00';
+      const timeB = prev[dayB] || '09:00';
+      return {
+        ...prev,
+        [dayA]: timeB,
+        [dayB]: timeA,
+      };
+    });
 
     // Follow the swapped day to its new index so the user remains on the day they just moved
     setActiveDayTab((prev) => {
@@ -305,6 +341,7 @@ export function App() {
     setError(null);
     setSelectedWaypointId(null);
     setTotalDays(1);
+    setDayDepartureTimes({ 1: '09:00' });
     setActiveDayTab(null);
   }, []);
 
@@ -312,6 +349,7 @@ export function App() {
   const handleLoadPreset = useCallback((preset: TripPreset) => {
     const presetDays = preset.days || 1;
     setTotalDays(presetDays);
+    setDayDepartureTimes({ 1: '09:00', 2: '09:00', 3: '09:00' });
     setActiveDayTab(null);
 
     const loadedWaypoints: Waypoint[] = preset.waypoints.map((w, idx) => {
@@ -380,7 +418,8 @@ export function App() {
       <Sidebar
         waypoints={waypoints}
         routeData={routeData}
-        departureTime={departureTime}
+        dayDepartureTimes={dayDepartureTimes}
+        onSetDayDepartureTime={handleSetDayDepartureTime}
         totalDays={totalDays}
         activeDayTab={activeDayTab}
         onActiveDayTabChange={setActiveDayTab}
@@ -389,7 +428,6 @@ export function App() {
         onRemoveDay={handleRemoveDayConfirmed}
         onSwapDays={handleSwapDays}
         onChangeWaypointDay={handleChangeWaypointDay}
-        onDepartureTimeChange={setDepartureTime}
         onRenameWaypoint={handleRenameWaypoint}
         onRemoveWaypoint={handleRemoveWaypoint}
         onReorderWaypoint={handleReorderWaypoint}

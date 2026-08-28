@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import type {
   Waypoint,
   RouteData,
@@ -38,7 +38,9 @@ import {
 interface SidebarProps {
   waypoints: Waypoint[];
   routeData: RouteData | null;
-  departureTime: string;
+  dayDepartureTimes?: Record<number, string>;
+  onSetDayDepartureTime?: (day: number, time: string) => void;
+  departureTime?: string;
   totalDays: number;
   activeDayTab: number | null; // null = all days
   onActiveDayTabChange: (day: number | null) => void;
@@ -47,7 +49,7 @@ interface SidebarProps {
   onRemoveDay: (day: number) => void;
   onSwapDays: (dayA: number, dayB: number) => void;
   onChangeWaypointDay: (waypointId: string, newDay: number) => void;
-  onDepartureTimeChange: (time: string) => void;
+  onDepartureTimeChange?: (time: string) => void;
   onRenameWaypoint?: (id: string, newTitle: string) => void;
   onRemoveWaypoint: (id: string) => void;
   onReorderWaypoint: (index: number, direction: 'up' | 'down') => void;
@@ -99,15 +101,14 @@ function calculateDaytimeStopMinutes(waypoints: Waypoint[]): number {
 }
 
 function calculateWaypointSchedules(
-  departureTime: string,
+  getDayDepartureTime: (day: number) => string,
   waypoints: Waypoint[],
   legs: RouteLeg[] | undefined
 ): WaypointSchedule[] {
-  const [depH, depM] = departureTime.split(':').map(Number);
-  if (isNaN(depH) || isNaN(depM)) return waypoints.map(() => ({}));
-
-  let currentMinutes = depH * 60 + depM;
   let lastDay = 1;
+  const firstDep = getDayDepartureTime(1) || '09:00';
+  const [depH, depM] = firstDep.split(':').map(Number);
+  let currentMinutes = (isNaN(depH) ? 9 : depH) * 60 + (isNaN(depM) ? 0 : depM);
   const schedules: WaypointSchedule[] = [];
 
   for (let i = 0; i < waypoints.length; i++) {
@@ -115,9 +116,10 @@ function calculateWaypointSchedules(
     const wpDay = wp.day || 1;
     const isStay = wp.category === 'stay';
 
-    // If day changed, reset time to morning departure
-    if (wpDay !== lastDay) {
-      currentMinutes = depH * 60 + depM;
+    // If day changed or start of first day, reset time to that specific day's morning departure
+    if (wpDay !== lastDay || i === 0) {
+      const [dayH, dayM] = (getDayDepartureTime(wpDay) || '09:00').split(':').map(Number);
+      currentMinutes = (isNaN(dayH) ? 9 : dayH) * 60 + (isNaN(dayM) ? 0 : dayM);
       lastDay = wpDay;
     }
 
@@ -154,8 +156,14 @@ function calculateWaypointSchedules(
 }
 
 // Utility: compute overall ETA from departure time + driving duration + daytime stop durations
-function computeETA(departureTime: string, drivingMinutes: number, waypoints: Waypoint[]): string {
-  const [depHours, depMins] = departureTime.split(':').map(Number);
+function computeETA(
+  getDayDepartureTime: (day: number) => string,
+  totalDays: number,
+  drivingMinutes: number,
+  waypoints: Waypoint[]
+): string {
+  const lastDay = totalDays || 1;
+  const [depHours, depMins] = (getDayDepartureTime(lastDay) || '09:00').split(':').map(Number);
   if (isNaN(depHours) || isNaN(depMins)) return '--:--';
 
   const daytimeStopMinutes = calculateDaytimeStopMinutes(waypoints);
@@ -167,7 +175,9 @@ function computeETA(departureTime: string, drivingMinutes: number, waypoints: Wa
 export const Sidebar: React.FC<SidebarProps> = ({
   waypoints,
   routeData,
-  departureTime,
+  dayDepartureTimes,
+  onSetDayDepartureTime,
+  departureTime = '09:00',
   totalDays,
   activeDayTab,
   onActiveDayTabChange,
@@ -194,6 +204,26 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const totalStops = waypoints.length;
   const hasRoute = routeData !== null && waypoints.length >= 2;
 
+  // Helper to retrieve departure time for any given day
+  const getDayDepartureTime = useCallback(
+    (day: number) => {
+      if (dayDepartureTimes && dayDepartureTimes[day]) {
+        return dayDepartureTimes[day];
+      }
+      return departureTime || '09:00';
+    },
+    [dayDepartureTimes, departureTime]
+  );
+
+  const handleDepartureTimeChangeForDay = (day: number, newTime: string) => {
+    if (onSetDayDepartureTime) {
+      onSetDayDepartureTime(day, newTime);
+    }
+    if (onDepartureTimeChange) {
+      onDepartureTimeChange(newTime);
+    }
+  };
+
   // Confirmation state for deleting a day with waypoints
   const [dayToDelete, setDayToDelete] = useState<number | null>(null);
 
@@ -211,11 +241,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const totalStopMinutes = calculateDaytimeStopMinutes(waypoints);
 
   const eta = hasRoute
-    ? computeETA(departureTime, routeData.durationMinutes, waypoints)
+    ? computeETA(getDayDepartureTime, totalDays, routeData.durationMinutes, waypoints)
     : '--:--';
 
   const schedules = calculateWaypointSchedules(
-    departureTime,
+    getDayDepartureTime,
     waypoints,
     routeData?.legs
   );
@@ -473,13 +503,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <div className="flex items-center gap-1.5">
             <span className="text-slate-400 text-[11px] flex items-center gap-1">
               <Clock className="w-3 h-3 text-sky-400" />
-              <span>Partenza:</span>
+              <span>Partenza{activeDayTab ? ` G${activeDayTab}` : ' G1'}:</span>
             </span>
             <input
               type="time"
-              value={departureTime}
-              onChange={(e) => onDepartureTimeChange(e.target.value)}
-              className="bg-slate-900 border border-slate-700/80 text-white text-[11px] rounded-md px-1.5 py-0.5 font-mono focus:outline-none cursor-pointer"
+              value={getDayDepartureTime(activeDayTab || 1)}
+              onChange={(e) => handleDepartureTimeChangeForDay(activeDayTab || 1, e.target.value)}
+              className="bg-slate-900 border border-slate-700/80 text-white text-[11px] rounded-md px-1.5 py-0.5 font-mono focus:outline-none cursor-pointer hover:border-slate-500"
+              title={`Orario di partenza per il Giorno ${activeDayTab || 1}`}
             />
           </div>
         </div>
@@ -685,14 +716,25 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <div key={waypoint.id} className="space-y-1">
               {/* Day Divider Banner */}
               {isFirstOfDay && (
-                <div className="pt-2 pb-0.5 flex items-center justify-between border-b border-slate-800 text-[11px] text-indigo-300 font-semibold">
-                  <span className="flex items-center gap-1">
-                    <Calendar className="w-3 h-3 text-indigo-400" />
+                <div className="pt-2.5 pb-1 flex items-center justify-between border-b border-slate-800 text-[11px] text-indigo-300 font-semibold">
+                  <span className="flex items-center gap-1.5">
+                    <Calendar className="w-3.5 h-3.5 text-indigo-400" />
                     <span>Giorno {currentDay}</span>
                   </span>
-                  <span className="text-[10px] text-slate-500 font-normal">
-                    {waypoints.filter((w) => (w.day || 1) === currentDay).length} tappe
-                  </span>
+                  <div
+                    className="flex items-center gap-1.5 bg-slate-900 px-2 py-0.5 rounded border border-slate-700/60 shadow-sm"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <Clock className="w-3 h-3 text-emerald-400" />
+                    <span className="text-[10px] text-slate-400 font-normal">Partenza:</span>
+                    <input
+                      type="time"
+                      value={getDayDepartureTime(currentDay)}
+                      onChange={(e) => handleDepartureTimeChangeForDay(currentDay, e.target.value)}
+                      className="bg-transparent text-[11px] font-mono font-bold text-emerald-300 focus:outline-none cursor-pointer"
+                      title={`Orario di partenza Giorno ${currentDay}`}
+                    />
+                  </div>
                 </div>
               )}
 
